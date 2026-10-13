@@ -20,6 +20,7 @@ export default async function CuentaPage() {
           <p className="mt-1 text-sm text-muted">Ponla una vez y ya entras con correo y contraseña, sin esperar correos.</p>
           <ChangePassword />
         </div>
+        <a href="/salir" className="btn btn-ghost mt-4 w-full">Cerrar sesión</a>
       </main>
     </>
   );
