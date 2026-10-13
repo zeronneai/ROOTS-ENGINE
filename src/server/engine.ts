@@ -54,13 +54,23 @@ export async function getClientContext(db: DB, clientId: string) {
 export type ClientContext = Awaited<ReturnType<typeof getClientContext>>;
 
 /** Estilo final del cliente: preset (nicho o elegido) → color de marca → overrides → mood → edición. */
-export function styleForClient(ctx: ClientContext, opts?: { moodId?: string | null; edit?: StyleOverrides; presetId?: string | null }) {
-  const mood = opts?.moodId ? ctx.moods.find((m) => m.id === opts.moodId) : ctx.activeMood;
+export function styleForClient(
+  ctx: ClientContext,
+  opts?: { moodId?: string | null; edit?: StyleOverrides; presetId?: string | null },
+) {
+  // undefined = usar el mood activo; null = sin mood
+  const mood =
+    opts?.moodId === undefined ? ctx.activeMood : opts.moodId ? ctx.moods.find((m) => m.id === opts.moodId) : null;
   return resolveStyle({
-    presetId: opts?.presetId ?? ctx.client.edit_style_id ?? ctx.brand.data.visual?.recommendedPresetId ?? null,
+    presetId: ctx.client.edit_style_id ?? ctx.brand.data.visual?.recommendedPresetId ?? null,
     niche: ctx.client.niche,
     brandAccent: ctx.brand.data.visual?.accentColor ?? null,
-    layers: [ctx.brand.style_overrides, mood?.style_overrides, opts?.edit],
+    // un preset elegido para ESTE video gana sobre el del mood
+    layers: [
+      ctx.brand.style_overrides,
+      mood?.style_overrides,
+      { ...(opts?.edit ?? {}), ...(opts?.presetId ? { presetId: opts.presetId } : {}) },
+    ],
   });
 }
 
@@ -163,7 +173,9 @@ export async function scanCompetitors(db: DB, clientId: string, perAccount = 30)
         last_scanned_at: new Date().toISOString(),
       })
       .eq("id", c.id);
-    const rows = posts.map((p) => ({
+    const seen = new Set<string>();
+    const unique = posts.filter((p) => (seen.has(p.externalId) ? false : (seen.add(p.externalId), true)));
+    const rows = unique.map((p) => ({
       competitor_id: c.id,
       client_id: clientId,
       platform: p.platform,
@@ -225,9 +237,9 @@ export async function analyzeTopPosts(db: DB, clientId: string, limit = 8, minSc
 
 export function nextMonday(from = new Date()) {
   const d = new Date(from);
-  const day = d.getDay(); // 0 dom
+  const day = d.getUTCDay(); // 0 dom
   const diff = day === 1 ? 0 : (8 - day) % 7 || 7;
-  d.setDate(d.getDate() + diff);
+  d.setUTCDate(d.getUTCDate() + diff);
   return d.toISOString().slice(0, 10);
 }
 
@@ -237,7 +249,7 @@ export async function generatePlan(
   opts: { count?: number; weekStart?: string; extra?: string | null } = {},
 ) {
   const ctx = await getClientContext(db, clientId);
-  const weekStart = opts.weekStart ?? nextMonday();
+  const weekStart = opts.weekStart && /^\d{4}-\d{2}-\d{2}$/.test(opts.weekStart) ? opts.weekStart : nextMonday();
   const count = opts.count ?? (ctx.client.plan_tier === "plan" ? 4 : 5);
 
   const [{ data: winners }, { data: recent }] = await Promise.all([

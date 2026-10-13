@@ -186,31 +186,42 @@ export function buildEdl(opts: {
 function computeSegments(words: Word[], removed: Set<number>, duration: number, style: EditStyle) {
   const gapMax = style.pacing.cutSilencesOverMs / 1000;
   const pad = style.pacing.keepPaddingMs / 1000;
-  if (!words.length) return [{ start: 0, end: duration }];
+  if (!words.length || !(duration > 0)) return [{ start: 0, end: Math.max(duration, 0.1) }];
 
-  const segs: { start: number; end: number }[] = [];
-  let cur: { start: number; end: number } | null = null;
+  type Seg = { start: number; end: number; hardStart?: number; hardEnd?: number };
+  const segs: Seg[] = [];
+  let cur: Seg | null = null;
   let forceCut = false;
+  let removedStart: number | null = null;
+  let removedEnd: number | null = null;
 
   words.forEach((w, i) => {
     if (removed.has(i)) {
+      if (!forceCut) removedStart = w.start;
+      removedEnd = w.end;
       forceCut = true;
       return;
     }
     if (!cur) {
-      cur = { start: w.start, end: w.end };
+      cur = { start: w.start, end: w.end, hardStart: forceCut ? removedEnd ?? undefined : undefined };
     } else if (forceCut || w.start - cur.end > gapMax) {
+      // en un corte forzado (muletilla / toma mala) el padding no puede comerse lo borrado
+      if (forceCut && removedStart !== null) cur.hardEnd = removedStart;
       segs.push(cur);
-      cur = { start: w.start, end: w.end };
+      cur = { start: w.start, end: w.end, hardStart: forceCut ? removedEnd ?? undefined : undefined };
     } else {
       cur.end = w.end;
     }
     forceCut = false;
+    removedStart = null;
   });
   if (cur) segs.push(cur);
 
   // padding sin encimar segmentos
-  const padded = segs.map((s) => ({ start: Math.max(0, s.start - pad), end: Math.min(duration, s.end + pad) }));
+  const padded = segs.map((s) => ({
+    start: Math.max(0, s.hardStart ?? -Infinity, s.start - pad),
+    end: Math.min(duration, s.hardEnd ?? Infinity, s.end + pad),
+  }));
   for (let i = 1; i < padded.length; i++) {
     if (padded[i].start < padded[i - 1].end) {
       const mid = (segs[i - 1].end + segs[i].start) / 2;
@@ -218,9 +229,11 @@ function computeSegments(words: Word[], removed: Set<number>, duration: number, 
       padded[i].start = mid;
     }
   }
-  return padded
+  const out = padded
     .filter((s) => s.end - s.start > 0.08)
     .map((s) => ({ start: +s.start.toFixed(3), end: +s.end.toFixed(3) }));
+  // nunca regresar un video vacío
+  return out.length ? out : [{ start: 0, end: duration }];
 }
 
 // ───────────────────────────── Timeline map ───────────────────────────

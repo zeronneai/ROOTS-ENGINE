@@ -8,7 +8,7 @@
  *   mode = 'agency' → agency_editing (lo toma el equipo de PRA)
  */
 import "./load-env";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -60,7 +60,15 @@ function probe(file: string) {
     "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height:format=duration", "-of", "json", file,
   ]).toString();
   const j = JSON.parse(out);
-  return { duration: Number(j.format.duration), width: j.streams?.[0]?.width ?? 1080, height: j.streams?.[0]?.height ?? 1920 };
+  let duration = Number(j.format?.duration);
+  if (!Number.isFinite(duration)) {
+    // webm de navegador a veces no trae duración: la sacamos decodificando
+    const log = spawnSync("ffmpeg", ["-v", "info", "-i", file, "-f", "null", "-"], { encoding: "utf8" }).stderr ?? "";
+    const m = [...log.matchAll(/time=(\d+):(\d+):([\d.]+)/g)].pop();
+    duration = m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : NaN;
+  }
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error("No se pudo leer la duración del video");
+  return { duration, width: j.streams?.[0]?.width ?? 1080, height: j.streams?.[0]?.height ?? 1920 };
 }
 
 async function fail(id: string, err: unknown) {
@@ -115,7 +123,8 @@ async function stepDirect() {
         style_id: edit.style_id ?? style.id,
         status: AUTO_RENDER ? "render_queued" : "review",
       })
-      .eq("id", edit.id);
+      .eq("id", edit.id)
+      .eq("status", "directing_claimed");
   } catch (e) {
     await fail(edit.id, e);
   }
@@ -165,8 +174,19 @@ async function stepRender() {
   return true;
 }
 
+/** Si el worker se cayó a medio proceso, regresa esas ediciones a la fila. */
+async function sweepStale() {
+  const cutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+  const back: Record<string, string> = { transcribing: "queued", directing_claimed: "directing", rendering: "render_queued" };
+  for (const [from, to] of Object.entries(back)) {
+    await db.from("edits").update({ status: to }).eq("status", from).lt("updated_at", cutoff);
+  }
+}
+
 async function loop() {
   console.log(`ROOTS ENGINE worker arriba (auto-render: ${AUTO_RENDER})`);
+  await sweepStale();
+  setInterval(sweepStale, 10 * 60 * 1000);
   for (;;) {
     const did = (await stepTranscribe()) || (await stepDirect()) || (await stepRender());
     if (!did) await new Promise((r) => setTimeout(r, POLL_MS));

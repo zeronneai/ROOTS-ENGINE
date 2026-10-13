@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AGENCY_CONTEXT, json, structured } from "./claude";
 import { PRESETS } from "../styles/presets";
 import { AVAILABLE_FONTS } from "../styles/fonts";
+import { sanitizeOverrides } from "../styles/sanitize";
 import type { EditStyle, StyleOverrides } from "../styles/types";
 
 const MoodSchema = z.object({
@@ -61,5 +62,5 @@ REFERENCES: ${json(opts.references ?? [])}`,
 
   const presetId = m.presetId && PRESETS.some((p) => p.id === m.presetId) ? m.presetId : null;
   if (presetId) overrides.presetId = presetId;
-  return { name: m.name, presetId, overrides, toneNotes: m.toneNotes };
+  return { name: m.name, presetId, overrides: sanitizeOverrides(overrides), toneNotes: m.toneNotes };
 }

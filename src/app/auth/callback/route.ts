@@ -9,5 +9,7 @@ export async function GET(request: Request) {
     const supabase = await supabaseServer();
     await supabase.auth.exchangeCodeForSession(code);
   }
-  return NextResponse.redirect(new URL(next.startsWith("/") ? next : "/agency", url.origin));
+  const safe = /^\/(?![\/\\])/.test(next) ? next : "/agency";
+  const target = new URL(safe, url.origin);
+  return NextResponse.redirect(target.origin === url.origin ? target : new URL("/agency", url.origin));
 }

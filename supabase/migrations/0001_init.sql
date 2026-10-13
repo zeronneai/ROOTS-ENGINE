@@ -300,15 +300,22 @@ insert into storage.buckets (id, name, public) values
 on conflict (id) do nothing;
 
 drop policy if exists roots_storage_rw on storage.objects;
-create policy roots_storage_rw on storage.objects for all
-  using (
-    bucket_id in ('recordings', 'renders', 'brand')
-    and can_access_client((storage.foldername(name))[1])
-  )
-  with check (
-    bucket_id in ('recordings', 'brand')
-    and can_access_client((storage.foldername(name))[1])
-  );
+drop policy if exists roots_storage_read on storage.objects;
+drop policy if exists roots_storage_insert on storage.objects;
+drop policy if exists roots_storage_agency on storage.objects;
+
+-- leer: agencia y el propio cliente
+create policy roots_storage_read on storage.objects for select
+  using (bucket_id in ('recordings', 'renders', 'brand') and can_access_client((storage.foldername(name))[1]));
+
+-- subir: agencia y el propio cliente (solo grabaciones y archivos de marca)
+create policy roots_storage_insert on storage.objects for insert
+  with check (bucket_id in ('recordings', 'brand') and can_access_client((storage.foldername(name))[1]));
+
+-- modificar y borrar: solo la agencia
+create policy roots_storage_agency on storage.objects for all
+  using (bucket_id in ('recordings', 'renders', 'brand') and is_agency())
+  with check (bucket_id in ('recordings', 'renders', 'brand') and is_agency());
 
 -- Si a alguien que YA tiene cuenta lo agregan a members, se actualiza su profile.
 create or replace function sync_member_profile() returns trigger

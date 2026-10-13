@@ -1,6 +1,7 @@
 import type { EditStyle, StyleOverrides } from "./types";
 import { deepMerge } from "./merge";
 import { getPreset, presetForNiche } from "./presets";
+import { sanitizeOverrides } from "./sanitize";
 
 const DENSITIES = ["none", "low", "medium", "high"] as const;
 
@@ -18,7 +19,9 @@ export type ResolveInput = {
  * Preset del nicho → color de marca → overrides del cliente → mood activo → ajuste puntual.
  * Así cada cliente parte de lo que funciona en su giro pero se ve como SU marca.
  */
-export function resolveStyle({ presetId, niche, brandAccent, layers = [] }: ResolveInput): EditStyle {
+export function resolveStyle({ presetId, niche, brandAccent: rawAccent, layers: rawLayers = [] }: ResolveInput): EditStyle {
+  const layers = rawLayers.map((l) => (l ? sanitizeOverrides(l) : null));
+  const brandAccent = rawAccent && /^#[0-9a-fA-F]{3,8}$/.test(rawAccent) ? rawAccent : null;
   // la última capa que pida otro preset gana
   const layerPreset = [...layers].reverse().find((l) => l?.presetId)?.presetId;
   const chosen = layerPreset ?? presetId;

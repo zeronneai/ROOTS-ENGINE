@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requireAgency, requireClientAccess } from "@/server/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { StyleOverrides } from "@/lib/styles/types";
+import { sanitizeOverrides } from "@/lib/styles/sanitize";
+import { PRESETS } from "@/lib/styles/presets";
 
 const str = (f: FormData, k: string) => {
   const v = f.get(k);
@@ -17,6 +19,14 @@ const handles = (raw: string | null) =>
     .split(/[\s,]+/)
     .map((h) => h.trim().replace(/^@/, "").replace(/\/$/, "").split("/").pop()!)
     .filter(Boolean);
+
+/** Regresa el id solo si el mood es de ese cliente. */
+async function ownMood(clientId: string, moodId: string) {
+  const { data } = await supabaseAdmin().from("moods").select("id").eq("id", moodId).eq("client_id", clientId).maybeSingle();
+  return data?.id ?? null;
+}
+
+const INPUT_KINDS = ["note", "link", "file", "reference_video", "voice_sample"];
 
 // ───────────────────────────── Clientes ─────────────────────────────
 
@@ -105,7 +115,9 @@ export async function addAgencyMemberAction(form: FormData) {
 /** Agencia o cliente agregan algo: nota, link, referencia. Se suma al Brand Brain al re-sintetizar. */
 export async function addBrandInputAction(clientId: string, form: FormData) {
   const viewer = await requireClientAccess(clientId);
-  const kind = str(form, "kind") ?? "note";
+  const kind = INPUT_KINDS.includes(str(form, "kind") ?? "") ? str(form, "kind")! : "note";
+  const moodRaw = str(form, "mood_id");
+  const moodId = moodRaw ? await ownMood(clientId, moodRaw) : null;
   const content = str(form, "content");
   const url = str(form, "url");
   if (!content && !url) return;
@@ -117,7 +129,7 @@ export async function addBrandInputAction(clientId: string, form: FormData) {
       title: str(form, "title"),
       content,
       url,
-      mood_id: str(form, "mood_id"),
+      mood_id: moodId,
       added_by: viewer.id,
       added_by_role: viewer.role,
     });
@@ -170,16 +182,19 @@ export async function saveStyleAction(
 ) {
   await requireClientAccess(clientId);
   const db = supabaseAdmin();
-  await db.from("clients").update({ edit_style_id: state.presetId }).eq("id", clientId);
+  const presetId = PRESETS.some((p) => p.id === state.presetId) ? state.presetId : null;
+  const moodId = state.moodId ? await ownMood(clientId, state.moodId) : null;
+  await db.from("clients").update({ edit_style_id: presetId }).eq("id", clientId);
   await db
     .from("brand_profiles")
-    .upsert({ client_id: clientId, style_overrides: state.overrides, active_mood_id: state.moodId }, { onConflict: "client_id" });
+    .upsert({ client_id: clientId, style_overrides: sanitizeOverrides(state.overrides), active_mood_id: moodId }, { onConflict: "client_id" });
   revalidatePath(`/c/${clientId}`, "layout");
 }
 
 export async function setActiveMoodAction(clientId: string, moodId: string | null) {
   await requireClientAccess(clientId);
-  await supabaseAdmin().from("brand_profiles").upsert({ client_id: clientId, active_mood_id: moodId }, { onConflict: "client_id" });
+  const id = moodId ? await ownMood(clientId, moodId) : null;
+  await supabaseAdmin().from("brand_profiles").upsert({ client_id: clientId, active_mood_id: id }, { onConflict: "client_id" });
   revalidatePath(`/c/${clientId}`, "layout");
 }
 
@@ -205,8 +220,18 @@ export async function registerRecordingAction(
   input: { storagePath: string; originalName: string; ideaId: string | null; mode: "auto" | "agency"; notes?: string },
 ) {
   const viewer = await requireClientAccess(clientId);
-  if (!input.storagePath.startsWith(`${clientId}/`)) throw new Error("Ruta inválida");
+  if (!input.storagePath.startsWith(`${clientId}/`) || input.storagePath.includes("..")) throw new Error("Ruta inválida");
   const db = supabaseAdmin();
+  if (viewer.role !== "agency") {
+    const { data: c } = await db.from("clients").select("plan_tier").eq("id", clientId).single();
+    const allowed: string[] =
+      c?.plan_tier === "auto" ? ["auto"] : c?.plan_tier === "edit" || c?.plan_tier === "full" ? ["auto", "agency"] : [];
+    if (!allowed.includes(input.mode)) throw new Error("Tu plan no incluye esta edición");
+  }
+  if (input.ideaId) {
+    const { data: idea } = await db.from("content_ideas").select("id").eq("id", input.ideaId).eq("client_id", clientId).maybeSingle();
+    if (!idea) input = { ...input, ideaId: null };
+  }
   const { data: rec, error } = await db
     .from("recordings")
     .insert({
@@ -227,15 +252,16 @@ export async function registerRecordingAction(
     notes: input.notes ?? null,
     status: "queued",
   });
-  if (input.ideaId) await db.from("content_ideas").update({ status: "recorded" }).eq("id", input.ideaId);
+  if (input.ideaId) await db.from("content_ideas").update({ status: "recorded" }).eq("id", input.ideaId).eq("client_id", clientId);
   revalidatePath(`/c/${clientId}/videos`);
 }
 
 export async function retryEditAction(clientId: string, editId: string) {
   await requireClientAccess(clientId);
   const db = supabaseAdmin();
-  const { data } = await db.from("edits").select("transcript, edl").eq("id", editId).single();
-  const status = data?.edl ? "render_queued" : data?.transcript ? "directing" : "queued";
-  await db.from("edits").update({ status, error: null }).eq("id", editId).eq("client_id", clientId);
+  const { data } = await db.from("edits").select("transcript, edl, status").eq("id", editId).eq("client_id", clientId).single();
+  if (data?.status !== "failed") return;
+  const status = data.edl ? "render_queued" : data.transcript ? "directing" : "queued";
+  await db.from("edits").update({ status, error: null }).eq("id", editId).eq("client_id", clientId).eq("status", "failed");
   revalidatePath(`/c/${clientId}/videos`);
 }

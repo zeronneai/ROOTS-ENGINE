@@ -59,7 +59,7 @@ export function StyleLab(props: {
         presetId,
         niche: props.niche,
         brandAccent: useBrand ? props.brandAccent : null,
-        layers: [props.clientOverrides, mood?.style_overrides, overrides],
+        layers: [props.clientOverrides, mood?.style_overrides, { ...overrides, ...(presetId ? { presetId } : {}) }],
       }),
     [presetId, props.niche, props.brandAccent, props.clientOverrides, mood, overrides, useBrand],
   );
