@@ -24,7 +24,11 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
   const toRecord = ideas.filter((i) => ["idea", "approved"].includes(i.status)).length;
   const inReview = (edits ?? []).filter((e) => e.status === "review").length;
   const done = (edits ?? []).filter((e) => e.status === "done").length;
-  const questions = brand.data.openQuestions ?? [];
+  // las preguntas ya contestadas desaparecen
+  const { data: answered } = await db.from("brand_inputs").select("title, synthesized").eq("client_id", id).not("title", "is", null);
+  const answeredTitles = new Set((answered ?? []).map((a) => a.title));
+  const questions = (brand.data.openQuestions ?? []).filter((q) => !answeredTitles.has(q));
+  const pendingAnswers = (answered ?? []).filter((a) => !a.synthesized).length;
 
   const steps = [
     {
@@ -77,6 +81,17 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
     <>
       <PageTitle kicker="Content Engine" title={isAgency ? client.name : `Hola, ${client.name}`} />
 
+      {(reportCount ?? 0) > 0 ? (
+        <Link href={`/c/${id}/reporte`} className="card glow mb-6 flex items-center justify-between gap-4 p-5 transition hover:border-purple">
+          <div>
+            <div className="display text-xs text-lavender">Listo</div>
+            <div className="mt-1 text-lg font-semibold">Reporte de estrategia</div>
+            <p className="text-sm text-muted">Mercado, oferta irresistible, oportunidades, estrategia, cómo grabar y presencia digital.</p>
+          </div>
+          <span className="btn btn-primary">Ver reporte →</span>
+        </Link>
+      ) : null}
+
       {isAgency ? <EngineRunner clientId={id} hasReport={(reportCount ?? 0) > 0} /> : null}
 
       {isAgency ? (
@@ -116,10 +131,19 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
       </ol>
       )}
 
+      {pendingAnswers > 0 ? (
+        <div className="card mt-10 flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm">
+            Hay <b>{pendingAnswers}</b> respuesta{pendingAnswers > 1 ? "s" : ""} nueva{pendingAnswers > 1 ? "s" : ""} que el motor todavía no toma en cuenta.
+          </p>
+          <ApiButton url={`/api/clients/${id}/synthesize`} label="Actualizar Brand Brain" busyLabel="Pensando..." />
+        </div>
+      ) : null}
+
       {questions.length ? (
         <section className="mt-10">
           <h2 className="text-lg font-semibold">Preguntas rápidas para afinar tu contenido</h2>
-          <p className="text-sm text-muted">Contesta las que puedas. Con eso el motor se ajusta solo.</p>
+          <p className="text-sm text-muted">Contesta las que puedas. Al guardar, la pregunta desaparece.</p>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {questions.map((q, i) => (
               <form key={i} action={addBrandInputAction.bind(null, id)} className="card space-y-2 p-4">
