@@ -79,6 +79,11 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
 
       {isAgency ? <EngineRunner clientId={id} hasReport={(reportCount ?? 0) > 0} /> : null}
 
+      {isAgency ? (
+        <details className="group">
+          <summary className="mb-3 cursor-pointer list-none text-sm text-muted hover:text-white">
+            <span className="group-open:hidden">▸</span><span className="hidden group-open:inline">▾</span> Estado de cada paso (y correrlos por separado)
+          </summary>
       <ol className="card divide-y divide-line/60">
         {steps.map((s) => (
           <li key={s.n} className="flex flex-wrap items-center gap-4 p-4">
@@ -93,6 +98,23 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
           </li>
         ))}
       </ol>
+        </details>
+      ) : (
+      <ol className="card divide-y divide-line/60">
+        {steps.map((s) => (
+          <li key={s.n} className="flex flex-wrap items-center gap-4 p-4">
+            <span className={`grid h-8 w-8 place-items-center rounded-full text-xs ${s.ok ? "bg-ok/15 text-ok" : "bg-line text-muted"}`}>
+              {s.ok ? "✓" : s.n}
+            </span>
+            <Link href={s.href} className="min-w-0 flex-1">
+              <div className="font-semibold">{s.t}</div>
+              <div className="truncate text-sm text-muted">{s.d}</div>
+            </Link>
+            {s.action}
+          </li>
+        ))}
+      </ol>
+      )}
 
       {questions.length ? (
         <section className="mt-10">

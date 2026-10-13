@@ -26,6 +26,7 @@ export function EngineRunner({ clientId, hasReport }: { clientId: string; hasRep
         const j = await res.json().catch(() => ({ error: `Error ${res.status}` }));
         if (!res.ok) throw new Error(j.error ?? `Error ${res.status}`);
         setStates((p) => ({ ...p, [s.id]: j.skipped ? "skipped" : "done" }));
+        router.refresh(); // que el resto de la pantalla se actualice paso a paso
         if (j.skipped) setNotes((p) => ({ ...p, [s.id]: j.skipped }));
       } catch (e) {
         setStates((p) => ({ ...p, [s.id]: "error" }));
