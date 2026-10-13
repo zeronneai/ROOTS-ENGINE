@@ -38,7 +38,11 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
       ok: (analyzed ?? 0) > 0,
       d: `${compCount ?? 0} cuentas vigiladas · ${analyzed ?? 0} videos ganadores analizados`,
       href: `/c/${id}/competencia`,
-      action: isAgency ? <ApiButton url={`/api/clients/${id}/scan`} label="Escanear" busyLabel="Escaneando..." variant="ghost" /> : null,
+      action: !isAgency ? null : compCount ? (
+        <ApiButton url={`/api/clients/${id}/scan`} label="Escanear" busyLabel="Escaneando..." variant="ghost" />
+      ) : (
+        <ApiButton url={`/api/clients/${id}/discover`} label="Buscar con IA" busyLabel="Investigando..." variant="ghost" />
+      ),
     },
     {
       n: "03",

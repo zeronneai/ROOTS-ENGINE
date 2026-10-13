@@ -10,7 +10,15 @@ import { synthesizeBrand } from "@/lib/ai/brand";
 import { analyzePost } from "@/lib/ai/analyze";
 import { planWeek } from "@/lib/ai/planner";
 import { moodFromDescription } from "@/lib/ai/mood";
-import { scrapeInstagram, scrapeTiktok, withOutlierScores, type ScrapedPost } from "@/lib/scrape/apify";
+import {
+  scrapeInstagram,
+  scrapeInstagramHashtags,
+  scrapeTiktok,
+  scrapeTiktokHashtags,
+  withOutlierScores,
+  type ScrapedPost,
+} from "@/lib/scrape/apify";
+import { discoveryQueries, pickCompetitors, type Candidate } from "@/lib/ai/discover";
 
 type DB = SupabaseClient;
 
@@ -150,6 +158,63 @@ export async function createMoodFromText(
 
 // ───────────────────────────── Competencia ─────────────────────────────
 
+/**
+ * Research automático: Claude decide hashtags del giro y la zona, Apify trae los reels que más pegan
+ * con esos hashtags y Claude escoge qué cuentas vale la pena vigilar.
+ */
+export async function discoverCompetitors(db: DB, clientId: string, max = 8) {
+  const ctx = await getClientContext(db, clientId);
+  const { data: existing } = await db.from("competitors").select("platform, handle").eq("client_id", clientId);
+  const known = new Set((existing ?? []).map((c) => `${c.platform}:${c.handle.toLowerCase()}`));
+  const own = [ctx.client.instagram, ctx.client.tiktok].filter(Boolean).map((h) => h!.toLowerCase());
+
+  const q = await discoveryQueries(ctx.client, ctx.brand.data);
+  const [ig, tt] = await Promise.all([
+    scrapeInstagramHashtags(q.instagramHashtags.slice(0, 8), 30).catch((e) => (console.error(e), [] as ScrapedPost[])),
+    scrapeTiktokHashtags(q.tiktokHashtags.slice(0, 6), 20).catch((e) => (console.error(e), [] as ScrapedPost[])),
+  ]);
+
+  const byAccount = new Map<string, Candidate>();
+  for (const p of [...ig, ...tt]) {
+    if (!p.handle || own.includes(p.handle)) continue;
+    const key = `${p.platform}:${p.handle}`;
+    if (known.has(key)) continue;
+    const c = byAccount.get(key) ?? {
+      platform: p.platform,
+      handle: p.handle,
+      displayName: p.displayName,
+      posts: 0,
+      maxViews: 0,
+      totalViews: 0,
+      captions: [],
+    };
+    c.posts++;
+    c.maxViews = Math.max(c.maxViews, p.views ?? 0);
+    c.totalViews += p.views ?? 0;
+    if (c.captions.length < 2 && p.caption) c.captions.push(p.caption.slice(0, 160));
+    byAccount.set(key, c);
+  }
+  const candidates = [...byAccount.values()].sort((a, b) => b.maxViews - a.maxViews).slice(0, 40);
+  if (!candidates.length) return { hashtags: q, added: 0 };
+
+  const picks = await pickCompetitors({ client: ctx.client, brand: ctx.brand.data, candidates, max });
+  if (picks.length) {
+    await db.from("competitors").upsert(
+      picks.map((p) => ({
+        client_id: clientId,
+        platform: p.platform,
+        handle: p.handle.toLowerCase(),
+        display_name: byAccount.get(`${p.platform}:${p.handle.toLowerCase()}`)?.displayName ?? null,
+        origin: "auto",
+        kind: p.kind,
+        note: p.reason,
+      })),
+      { onConflict: "client_id,platform,handle", ignoreDuplicates: true },
+    );
+  }
+  return { hashtags: q, added: picks.length };
+}
+
 export async function scanCompetitors(db: DB, clientId: string, perAccount = 30) {
   const { data: comps } = await db.from("competitors").select("*").eq("client_id", clientId);
   if (!comps?.length) return { scanned: 0, posts: 0 };
@@ -211,24 +276,30 @@ export async function analyzeTopPosts(db: DB, clientId: string, limit = 8, minSc
     .limit(limit);
 
   let done = 0;
-  for (const p of posts ?? []) {
-    const analysis = await analyzePost(
-      {
-        id: p.id,
-        handle: p.competitors.handle,
-        platform: p.platform,
-        caption: p.caption,
-        transcript: p.transcript,
-        views: p.views,
-        likes: p.likes,
-        comments: p.comments,
-        duration: p.duration,
-        outlier_score: p.outlier_score,
-      },
-      ctx.brand.data,
+  // de 4 en 4 para no pasarnos del tiempo de Vercel
+  const list = posts ?? [];
+  for (let i = 0; i < list.length; i += 4) {
+    await Promise.all(
+      list.slice(i, i + 4).map(async (p) => {
+        const analysis = await analyzePost(
+          {
+            id: p.id,
+            handle: p.competitors.handle,
+            platform: p.platform,
+            caption: p.caption,
+            transcript: p.transcript,
+            views: p.views,
+            likes: p.likes,
+            comments: p.comments,
+            duration: p.duration,
+            outlier_score: p.outlier_score,
+          },
+          ctx.brand.data,
+        );
+        await db.from("competitor_posts").update({ analysis, analyzed_at: new Date().toISOString() }).eq("id", p.id);
+        done++;
+      }),
     );
-    await db.from("competitor_posts").update({ analysis, analyzed_at: new Date().toISOString() }).eq("id", p.id);
-    done++;
   }
   return { analyzed: done };
 }
@@ -261,7 +332,12 @@ export async function generatePlan(
       .not("analysis", "is", null)
       .order("outlier_score", { ascending: false })
       .limit(12),
-    db.from("content_ideas").select("title").eq("client_id", clientId).order("created_at", { ascending: false }).limit(30),
+    db
+      .from("content_ideas")
+      .select("title")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false })
+      .limit(30),
   ]);
 
   const plan = await planWeek({
@@ -277,7 +353,9 @@ export async function generatePlan(
     recentTitles: (recent ?? []).map((r) => r.title),
     count,
     weekStart,
-    moodNotes: ctx.activeMood ? `${ctx.activeMood.name}: ${ctx.activeMood.tone_notes ?? ctx.activeMood.description ?? ""}` : null,
+    moodNotes: ctx.activeMood
+      ? `${ctx.activeMood.name}: ${ctx.activeMood.tone_notes ?? ctx.activeMood.description ?? ""}`
+      : null,
     extraInstructions: opts.extra ?? null,
   });
 

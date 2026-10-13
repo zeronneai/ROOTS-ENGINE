@@ -43,10 +43,10 @@ export default async function NewClient() {
               </select>
             </Field>
           </Grid>
-          <Field label="Competidores en Instagram (separados por espacio o coma)">
+          <Field label="Referencias en Instagram (opcional, el motor busca competencia solo)">
             <textarea name="competitors_ig" rows={2} className="input" placeholder="@competidor1 @competidor2" />
           </Field>
-          <Field label="Competidores en TikTok">
+          <Field label="Referencias en TikTok (opcional)">
             <textarea name="competitors_tt" rows={2} className="input" placeholder="@competidor1 @competidor2" />
           </Field>
           <Field label="Lo que ya sabemos del cliente (oferta, público, tono, qué puede grabar, lo que NO quiere)">

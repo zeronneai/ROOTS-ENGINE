@@ -2,7 +2,8 @@
  * Scraping de Instagram y TikTok vía Apify (https://apify.com).
  * Actores usados (se pueden cambiar por env):
  *   IG:     apify/instagram-reel-scraper
- *   TikTok: clockworks/tiktok-scraper
+ *   IG hashtags: apify/instagram-hashtag-scraper
+ *   TikTok: clockworks/tiktok-scraper (perfiles y hashtags)
  */
 
 export type ScrapedPost = {
@@ -24,6 +25,7 @@ export type ScrapedPost = {
 
 const IG_ACTOR = process.env.APIFY_IG_ACTOR || "apify~instagram-reel-scraper";
 const TT_ACTOR = process.env.APIFY_TIKTOK_ACTOR || "clockworks~tiktok-scraper";
+const IG_HASHTAG_ACTOR = process.env.APIFY_IG_HASHTAG_ACTOR || "apify~instagram-hashtag-scraper";
 
 async function runActor<T>(actor: string, input: unknown): Promise<T[]> {
   const token = process.env.APIFY_TOKEN;
@@ -51,6 +53,21 @@ export async function scrapeInstagram(handles: string[], perAccount = 30): Promi
     username: handles.map(clean),
     resultsLimit: perAccount,
   });
+  return mapIg(items);
+}
+
+/** Reels que más pegan con ciertos hashtags (para descubrir competencia). */
+export async function scrapeInstagramHashtags(hashtags: string[], perTag = 30): Promise<ScrapedPost[]> {
+  if (!hashtags.length) return [];
+  const items = await runActor<IgItem>(IG_HASHTAG_ACTOR, {
+    hashtags: hashtags.map((h) => h.replace(/^#/, "").replace(/\s+/g, "")),
+    resultsType: "reels",
+    resultsLimit: perTag,
+  });
+  return mapIg(items);
+}
+
+function mapIg(items: IgItem[]): ScrapedPost[] {
   return items
     .filter((i) => i.id || i.shortCode)
     .map((i) => ({
@@ -85,6 +102,20 @@ export async function scrapeTiktok(handles: string[], perAccount = 30): Promise<
     resultsPerPage: perAccount,
     shouldDownloadVideos: false,
   });
+  return mapTt(items);
+}
+
+export async function scrapeTiktokHashtags(hashtags: string[], perTag = 20): Promise<ScrapedPost[]> {
+  if (!hashtags.length) return [];
+  const items = await runActor<TtItem>(TT_ACTOR, {
+    hashtags: hashtags.map((h) => h.replace(/^#/, "").replace(/\s+/g, "")),
+    resultsPerPage: perTag,
+    shouldDownloadVideos: false,
+  });
+  return mapTt(items);
+}
+
+function mapTt(items: TtItem[]): ScrapedPost[] {
   return items
     .filter((i) => i.id)
     .map((i) => ({

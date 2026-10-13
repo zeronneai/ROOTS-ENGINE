@@ -21,13 +21,20 @@ export default async function CompetenciaPage({ params }: { params: Promise<{ id
       .limit(24),
   ]);
 
+  const hasWatch = (comps ?? []).some((c) => !c.is_own_account);
+
   return (
     <>
       <PageTitle kicker="02 · Competencia" title="Lo que le está funcionando a tu giro">
         {isAgency ? (
           <>
-            <ApiButton url={`/api/clients/${id}/scan`} body={{ skipScan: true }} label="Solo analizar" busyLabel="Analizando..." variant="ghost" />
-            <ApiButton url={`/api/clients/${id}/scan`} label="Escanear y analizar" busyLabel="Escaneando (1-3 min)..." />
+            <ApiButton url={`/api/clients/${id}/discover`} label="✦ Buscar competencia con IA" busyLabel="Investigando (1-2 min)..." variant={hasWatch ? "ghost" : "primary"} />
+            {hasWatch ? (
+              <>
+                <ApiButton url={`/api/clients/${id}/scan`} body={{ skipScan: true }} label="Solo analizar" busyLabel="Analizando..." variant="ghost" />
+                <ApiButton url={`/api/clients/${id}/scan`} label="Escanear y analizar" busyLabel="Escaneando (1-3 min)..." />
+              </>
+            ) : null}
           </>
         ) : null}
       </PageTitle>
@@ -36,8 +43,9 @@ export default async function CompetenciaPage({ params }: { params: Promise<{ id
         <section>
           {!posts?.length ? (
             <Empty title="Sin escaneo todavía">
-              Agrega cuentas de la competencia y dale a “Escanear”. El motor encuentra sus videos outlier (los que
-              pegaron muy por encima de su promedio) y los desarma.
+              {hasWatch
+                ? "Dale a “Escanear y analizar”. El motor encuentra los videos outlier (los que pegaron muy por encima de su promedio) y los desarma."
+                : "Dale a “Buscar competencia con IA”: el motor investiga los hashtags del giro y la zona, encuentra quién está pegando y lo agrega solo. Después escaneas."}
             </Empty>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
@@ -108,22 +116,25 @@ export default async function CompetenciaPage({ params }: { params: Promise<{ id
             <div className="mb-3 font-semibold">Cuentas vigiladas</div>
             <ul className="space-y-2 text-sm">
               {(comps ?? []).map((c) => (
-                <li key={c.id} className="flex items-center gap-2">
+                <li key={c.id} className="flex flex-wrap items-center gap-2" title={c.note ?? undefined}>
                   <span className="chip">{c.platform === "instagram" ? "IG" : "TT"}</span>
-                  <span className="truncate">@{c.handle}</span>
+                  <a href={c.platform === "instagram" ? `https://instagram.com/${c.handle}` : `https://tiktok.com/@${c.handle}`} target="_blank" className="truncate hover:text-lavender">@{c.handle}</a>
                   {c.is_own_account ? <span className="chip text-ok">tuya</span> : null}
+                  {c.origin === "auto" ? <span className="chip text-lavender">IA · {c.kind === "reference" ? "referencia" : "competencia"}</span> : null}
                   <span className="ml-auto text-xs text-muted">{c.median_views ? `med ${fmt(Number(c.median_views))}` : ""}</span>
                   {isAgency ? (
                     <form action={removeCompetitorAction.bind(null, id, c.id)}>
                       <button className="text-xs text-muted hover:text-bad">✕</button>
                     </form>
                   ) : null}
+                  {c.note ? <p className="w-full text-xs text-muted">{c.note}</p> : null}
                 </li>
               ))}
             </ul>
           </div>
           <form action={addCompetitorsAction.bind(null, id)} className="card space-y-3 p-5">
-            <div className="font-semibold">{isAgency ? "Agregar cuentas" : "¿A quién admiras o con quién compites?"}</div>
+            <div className="font-semibold">{isAgency ? "Agregar referencias (opcional)" : "¿A quién admiras o con quién compites?"}</div>
+            <p className="text-xs text-muted">El motor busca solo. Aquí puedes sumar cuentas que ya conozcas.</p>
             <select name="platform" className="input" defaultValue="instagram">
               <option value="instagram">Instagram</option>
               <option value="tiktok">TikTok</option>
