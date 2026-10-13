@@ -179,3 +179,33 @@ body {
 .btn:disabled {
   cursor: progress;
 }
+
+/* ───────── celular ───────── */
+html,
+body {
+  overflow-x: hidden;
+}
+@media (max-width: 639px) {
+  /* botones de acción a lo ancho, fáciles de tocar */
+  .page-actions {
+    width: 100%;
+  }
+  .page-actions > *,
+  .page-actions .btn {
+    flex: 1 1 auto;
+  }
+  .page-actions .btn {
+    width: 100%;
+  }
+  .btn {
+    padding: 0.75rem 1.1rem;
+    white-space: normal;
+    text-align: center;
+  }
+  .card {
+    border-radius: 16px;
+  }
+  .input {
+    font-size: 16px; /* evita el zoom automático de iPhone */
+  }
+}

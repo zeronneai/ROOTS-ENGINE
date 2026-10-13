@@ -4,7 +4,7 @@ import { Logo } from "./Logo";
 export function TopBar({ right }: { right?: React.ReactNode }) {
   return (
     <header className="sticky top-0 z-20 border-b border-line/60 bg-white/85 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-5">
         <Link href="/agency">
           <Logo small />
         </Link>
@@ -16,12 +16,12 @@ export function TopBar({ right }: { right?: React.ReactNode }) {
 
 export function PageTitle({ kicker, title, children }: { kicker?: string; title: string; children?: React.ReactNode }) {
   return (
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div>
+    <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+      <div className="min-w-0">
         {kicker ? <p className="display text-[11px] text-lavender">{kicker}</p> : null}
-        <h1 className="mt-2 text-3xl font-bold">{title}</h1>
+        <h1 className="mt-2 break-words text-2xl font-bold sm:text-3xl">{title}</h1>
       </div>
-      <div className="flex flex-wrap gap-2">{children}</div>
+      {children ? <div className="page-actions flex flex-wrap gap-2">{children}</div> : null}
     </div>
   );
 }

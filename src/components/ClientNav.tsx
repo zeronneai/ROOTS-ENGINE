@@ -16,7 +16,7 @@ export function ClientNav({ clientId, isAgency }: { clientId: string; isAgency: 
     ...(isAgency ? [{ href: `${base}/ajustes`, label: "Ajustes", n: "··" }] : []),
   ];
   return (
-    <nav className="flex gap-1 overflow-x-auto lg:flex-col">
+    <nav className="flex flex-col gap-1 p-1">
       {items.map((i) => {
         const active = i.href === base ? path === base : path.startsWith(i.href);
         return (

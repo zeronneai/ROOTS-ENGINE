@@ -51,7 +51,7 @@ export function EngineRunner({ clientId, hasReport }: { clientId: string; hasRep
           <div className="mt-1 text-lg font-semibold">Arrancar motor</div>
           <p className="text-sm text-muted">Investiga, analiza y arma reporte y plan en un solo paso. Tarda de 5 a 10 minutos; no cierres esta pestaña.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           {failed && !running ? (
             <button className="btn btn-ghost" onClick={() => run(failed.id)}>Reintentar desde aquí</button>
           ) : null}
