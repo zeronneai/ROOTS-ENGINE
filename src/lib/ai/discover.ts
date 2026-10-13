@@ -44,7 +44,9 @@ const PickSchema = z.object({
     z.object({
       platform: z.enum(["instagram", "tiktok"]),
       handle: z.string(),
-      kind: z.enum(["competitor", "reference"]).describe("competitor = compite directo (mismo giro y zona); reference = creador del nicho que vale la pena estudiar"),
+      kind: z
+        .enum(["competitor", "reference"])
+        .describe("competitor = ofrece EL MISMO servicio específico en la misma zona; reference = todo lo demás que vale la pena estudiar"),
       reason: z.string().describe("Una frase en español de por qué vale la pena vigilarla"),
     }),
   ),
@@ -64,6 +66,7 @@ export async function pickCompetitors(opts: {
     system: `${AGENCY_CONTEXT}
 
 From accounts found posting under the client's niche hashtags, pick up to ${opts.max} worth monitoring.
+"competitor" only if they sell the SAME specific service to the same area (a family or immigration lawyer is NOT a competitor of a personal injury lawyer, a tattoo shop is not a competitor of a barbershop). Everything else useful is a "reference".
 Keep: direct competitors in the same niche and region, and strong niche creators whose videos clearly perform (high views) and whose formats the client could adapt.
 Discard: spam, meme pages, reposters, accounts in unrelated niches, giant brands the client can't learn from, and the client itself.
 Aim for roughly half competitors and half references when possible. Use handles exactly as given.`,
