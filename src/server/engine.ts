@@ -452,17 +452,31 @@ export async function generateReport(db: DB, clientId: string) {
       .order("outlier_score", { ascending: false })
       .limit(10),
   ]);
-  const own = (comps ?? []).find((c) => c.is_own_account);
-  const { count: ownCount } = own
-    ? await db.from("competitor_posts").select("id", { count: "exact", head: true }).eq("competitor_id", own.id)
-    : { count: 0 };
+  const ownAccounts = (comps ?? []).filter((c) => c.is_own_account);
+  const ownStats = await Promise.all(
+    ownAccounts.map(async (o) => {
+      const { data: posts } = await db.from("competitor_posts").select("posted_at").eq("competitor_id", o.id);
+      const dates = (posts ?? []).map((p) => (p.posted_at ? new Date(p.posted_at).getTime() : 0)).filter(Boolean);
+      const now = Date.now();
+      const last = dates.length ? Math.max(...dates) : null;
+      return {
+        handle: o.handle,
+        platform: o.platform,
+        postsScanned: posts?.length ?? 0,
+        medianViews: Number(o.median_views ?? 0),
+        followers: o.followers,
+        postsLast30Days: dates.filter((d) => now - d < 30 * 864e5).length,
+        daysSinceLastPost: last ? Math.round((now - last) / 864e5) : null,
+      };
+    }),
+  );
+  const website = ctx.client.website ? { url: ctx.client.website, text: await fetchWebsiteText(ctx.client.website) } : null;
 
   const data = await buildReport({
     client: { name: ctx.client.name, niche: ctx.client.niche, city: ctx.client.city, plan_tier: ctx.client.plan_tier },
     brand: ctx.brand.data,
-    ownStats: own
-      ? { handle: own.handle, platform: own.platform, posts: ownCount ?? 0, medianViews: Number(own.median_views ?? 0), followers: own.followers }
-      : null,
+    ownStats,
+    website,
     ownTopPosts: (ownPosts ?? []).map((p) => ({ caption: p.caption?.slice(0, 300) ?? null, views: p.views, likes: p.likes, comments: p.comments })),
     competitors: (comps ?? [])
       .filter((c) => !c.is_own_account)

@@ -24,6 +24,34 @@ export const ReportSchema = z.object({
     weaknesses: z.array(z.string()),
     bestOwnContent: z.string().describe("Qué de lo que ya publicaron funcionó mejor y por qué, o 'sin datos'"),
   }),
+  offer: z.object({
+    name: z.string().describe("Nombre atractivo de la oferta"),
+    dreamOutcome: z.string().describe("El resultado soñado que el cliente final quiere"),
+    coreOffer: z.string().describe("Qué se vende exactamente"),
+    valueLevers: z.object({
+      likelihood: z.string().describe("Cómo aumentar la certeza de que sí va a funcionar (pruebas, testimonios, garantía)"),
+      speed: z.string().describe("Cómo hacer que el resultado llegue más rápido"),
+      effort: z.string().describe("Cómo quitarle esfuerzo y sacrificio al cliente"),
+    }),
+    bonuses: z.array(z.object({ name: z.string(), solves: z.string().describe("Qué objeción o problema resuelve") })),
+    guarantee: z.string(),
+    urgencyScarcity: z.string(),
+    priceAnchor: z.string().describe("Cómo presentar el precio para que se vea barato frente al valor"),
+    pitch: z.string().describe("La oferta dicha en 2 o 3 frases, lista para video o anuncio"),
+    cautions: z.string().describe("Qué NO prometer por temas legales o de credibilidad"),
+  }),
+  digitalPresence: z.object({
+    score: z.number().describe("0 a 100"),
+    issues: z.array(
+      z.object({
+        area: z.string().describe("Ej: Instagram, TikTok, sitio web, Google, consistencia, llamados a la acción"),
+        problem: z.string(),
+        fix: z.string(),
+        priority: z.enum(["alta", "media", "baja"]),
+      }),
+    ),
+    notChecked: z.array(z.string()).describe("Lo que no se pudo revisar con los datos disponibles"),
+  }),
   opportunities: z.array(
     z.object({
       title: z.string(),
@@ -50,12 +78,22 @@ export const ReportSchema = z.object({
   kpis: z.array(z.object({ metric: z.string(), target: z.string(), why: z.string() })),
   next30Days: z.array(z.object({ week: z.number(), focus: z.string() })),
 });
-export type Report = z.infer<typeof ReportSchema>;
+export type Report = Omit<z.infer<typeof ReportSchema>, "offer" | "digitalPresence"> &
+  Partial<Pick<z.infer<typeof ReportSchema>, "offer" | "digitalPresence">>;
 
 export async function buildReport(opts: {
   client: { name: string; niche: string | null; city: string | null; plan_tier: string };
   brand: Partial<BrandBrain>;
-  ownStats: { handle: string; platform: string; posts: number; medianViews: number; followers: number | null } | null;
+  ownStats: {
+    handle: string;
+    platform: string;
+    postsScanned: number;
+    medianViews: number;
+    followers: number | null;
+    postsLast30Days: number;
+    daysSinceLastPost: number | null;
+  }[];
+  website: { url: string; text: string | null } | null;
   ownTopPosts: { caption: string | null; views: number | null; likes: number | null; comments: number | null }[];
   competitors: { handle: string; platform: string; kind: string; note: string | null; medianViews: number | null }[];
   winners: { handle: string; views: number | null; outlier_score: number | null; analysis: PostAnalysis | null }[];
@@ -66,13 +104,16 @@ export async function buildReport(opts: {
     system: `${AGENCY_CONTEXT}
 
 You are PRA's head strategist writing the content strategy report for a client. The PRA team will film the client themselves (the client may not even know this engine exists), so the recording guide is for PRA's crew and for the owner on camera.
-Be specific and evidence based: cite competitors, numbers and the analyzed winning videos. No generic marketing advice. If data is missing, say so and give the best recommendation anyway.
+Be specific and evidence based: cite competitors, numbers and the analyzed winning videos.
+The "offer" section uses Alex Hormozi's Grand Slam Offer method: an offer so good people feel stupid saying no. Maximize the value equation (dream outcome x perceived likelihood of achievement) / (time delay x effort and sacrifice). Stack bonuses that each kill a specific objection, add a strong guarantee, real urgency or scarcity, and a clear name. Keep it realistic for this local business and legal for its industry (lawyers, medical, etc. have advertising rules: put those limits in cautions).
+The "digitalPresence" section diagnoses where their online presence is failing: posting consistency, content quality vs competitors, calls to action, website clarity, contact options. Only judge what the data shows; list anything you could not check (e.g. Google reviews, Facebook) in notChecked. No generic marketing advice. If data is missing, say so and give the best recommendation anyway.
 Everything in Spanish (Mexican, casual but professional). hooksToTest in the language the brand should post in.`,
     user: `CLIENT: ${json(opts.client)}
 
 BRAND BRAIN: ${json(opts.brand)}
 
-THEIR OWN ACCOUNT: ${json(opts.ownStats)}
+THEIR OWN ACCOUNTS: ${json(opts.ownStats)}
+THEIR WEBSITE: ${json(opts.website)}
 THEIR TOP POSTS: ${json(opts.ownTopPosts)}
 
 ACCOUNTS WE WATCH: ${json(opts.competitors)}

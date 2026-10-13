@@ -1,6 +1,7 @@
 import { loadClient } from "@/server/load";
 import { Empty, PageTitle } from "@/components/Shell";
 import { PrintButton } from "@/components/PrintButton";
+import { ApiButton } from "@/components/ApiButton";
 import type { Report } from "@/lib/ai/report";
 
 export default async function ReportePage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +23,9 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
   return (
     <article className="report space-y-8">
       <PageTitle kicker={`Reporte · ${date}`} title={client.name}>
+        <span className="print:hidden">
+          <ApiButton url={`/api/clients/${id}/engine/report`} label="Regenerar reporte" busyLabel="Escribiendo (1-2 min)..." variant="ghost" />
+        </span>
         <PrintButton />
       </PageTitle>
 
@@ -60,7 +64,33 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
         <p className="mt-4 text-sm"><span className="label">Lo mejor que ya han publicado: </span>{r.brandAudit.bestOwnContent}</p>
       </Section>
 
-      <Section n="04" title="Áreas de oportunidad">
+      {r.offer ? (
+        <Section n="04" title="La oferta irresistible">
+          <div className="rounded-xl bg-purple/10 p-5">
+            <div className="label">{r.offer.name}</div>
+            <p className="mt-2 text-lg font-semibold leading-snug">“{r.offer.pitch}”</p>
+          </div>
+          <div className="mt-5 grid gap-4 text-sm md:grid-cols-2">
+            <div><div className="label">Resultado soñado</div><p className="mt-1">{r.offer.dreamOutcome}</p></div>
+            <div><div className="label">Qué se vende</div><p className="mt-1">{r.offer.coreOffer}</p></div>
+            <div><div className="label">Más certeza de que funciona</div><p className="mt-1">{r.offer.valueLevers.likelihood}</p></div>
+            <div><div className="label">Resultado más rápido</div><p className="mt-1">{r.offer.valueLevers.speed}</p></div>
+            <div><div className="label">Menos esfuerzo para el cliente</div><p className="mt-1">{r.offer.valueLevers.effort}</p></div>
+            <div><div className="label">Garantía</div><p className="mt-1">{r.offer.guarantee}</p></div>
+            <div><div className="label">Urgencia / escasez</div><p className="mt-1">{r.offer.urgencyScarcity}</p></div>
+            <div><div className="label">Cómo presentar el precio</div><p className="mt-1">{r.offer.priceAnchor}</p></div>
+          </div>
+          <div className="label mt-5">Bonos (cada uno mata una objeción)</div>
+          <ul className="mt-2 space-y-2 text-sm">
+            {r.offer.bonuses.map((b, i) => (
+              <li key={i} className="rounded-lg border border-line px-3 py-2"><span className="font-semibold">{b.name}</span><span className="text-muted"> · {b.solves}</span></li>
+            ))}
+          </ul>
+          <p className="mt-4 text-xs text-warn">Cuidado: {r.offer.cautions}</p>
+        </Section>
+      ) : null}
+
+      <Section n="05" title="Áreas de oportunidad">
         <div className="space-y-3">
           {r.opportunities.map((o, i) => (
             <div key={i} className="rounded-xl border border-line p-4">
@@ -75,7 +105,7 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
         </div>
       </Section>
 
-      <Section n="05" title="Estrategia">
+      <Section n="06" title="Estrategia">
         <p className="text-lg">{r.strategy.positioning}</p>
         <div className="mt-5 space-y-2">
           {r.strategy.pillars.map((p, i) => (
@@ -96,7 +126,7 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
         </ol>
       </Section>
 
-      <Section n="06" title="Cómo grabar">
+      <Section n="07" title="Cómo grabar">
         <div className="grid gap-4 md:grid-cols-2">
           <List title="Setup" items={r.recordingGuide.setup} tone="lav" />
           <List title="Locaciones" items={r.recordingGuide.locations} tone="lav" />
@@ -110,7 +140,7 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
         </div>
       </Section>
 
-      <Section n="07" title="Qué medir">
+      <Section n="08" title="Qué medir">
         <div className="grid gap-3 md:grid-cols-3">
           {r.kpis.map((k, i) => (
             <div key={i} className="rounded-xl border border-line p-4 text-sm">
@@ -122,13 +152,32 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
         </div>
       </Section>
 
-      <Section n="08" title="Próximos 30 días">
+      <Section n="09" title="Próximos 30 días">
         <ol className="space-y-2">
           {r.next30Days.map((w, i) => (
             <li key={i} className="flex gap-3 text-sm"><span className="display text-lavender">Semana {w.week}</span><span>{w.focus}</span></li>
           ))}
         </ol>
       </Section>
+      {r.digitalPresence ? (
+        <Section n="✦" title={`Bonus: dónde está fallando su presencia digital · ${Math.round(r.digitalPresence.score)}/100`}>
+          <div className="space-y-3">
+            {r.digitalPresence.issues.map((x, i) => (
+              <div key={i} className="rounded-xl border border-line p-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="chip">{x.area}</span>
+                  <span className={`chip ${x.priority === "alta" ? "text-bad" : x.priority === "media" ? "text-warn" : "text-muted"}`}>prioridad {x.priority}</span>
+                </div>
+                <p className="mt-2"><span className="text-bad">Falla:</span> {x.problem}</p>
+                <p className="mt-1"><span className="text-ok">Arreglo:</span> {x.fix}</p>
+              </div>
+            ))}
+          </div>
+          {r.digitalPresence.notChecked.length ? (
+            <p className="mt-4 text-xs text-muted">No revisado todavía: {r.digitalPresence.notChecked.join(", ")}.</p>
+          ) : null}
+        </Section>
+      ) : null}
     </article>
   );
 }
