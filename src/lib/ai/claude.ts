@@ -16,6 +16,8 @@ export async function structured<S extends z.ZodType>(opts: {
   schema: S;
   system: string;
   user: string;
+  /** URLs de imágenes para que Claude las vea (fotos de producto, referencias) */
+  images?: string[];
   maxTokens?: number;
   model?: string;
 }): Promise<z.infer<S>> {
@@ -23,7 +25,17 @@ export async function structured<S extends z.ZodType>(opts: {
     model: opts.model ?? MODEL,
     max_tokens: opts.maxTokens ?? 8000,
     system: opts.system,
-    messages: [{ role: "user", content: opts.user }],
+    messages: [
+      {
+        role: "user",
+        content: opts.images?.length
+          ? [
+              ...opts.images.map((url) => ({ type: "image" as const, source: { type: "url" as const, url } })),
+              { type: "text" as const, text: opts.user },
+            ]
+          : opts.user,
+      },
+    ],
     output_config: { format: zodOutputFormat(opts.schema) },
   });
   if (res.parsed_output == null) {

@@ -48,6 +48,8 @@ export const EdlSchema = z.object({
   callouts: z
     .array(z.object({ at: z.number(), duration: z.number(), text: z.string(), kind: z.enum(["keyword", "number"]) }))
     .optional(),
+  /** imágenes del cliente que aparecen en el video (path = ruta en Storage) */
+  images: z.array(z.object({ at: z.number(), duration: z.number(), path: z.string() })).optional(),
   /** llamado a la acción del cierre */
   cta: z.string().nullable().optional(),
 });

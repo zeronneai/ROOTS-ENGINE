@@ -16,6 +16,8 @@ export type Direction = {
   callouts?: { word: number; text: string }[];
   /** llamado a la acción del cierre */
   cta?: string | null;
+  /** imágenes del cliente: en qué palabra aparece cada una */
+  images?: { path: string; word: number }[];
 };
 
 const FILLERS = new Set([
@@ -215,7 +217,16 @@ export function buildEdl(opts: {
       text: c.text,
       kind: /\d/.test(c.text) ? ("number" as const) : ("keyword" as const),
     }));
-  const underCallout = (t: number) => callouts.some((c) => t >= c.at - 0.3 && t <= c.at + c.duration);
+  const imageDur = 2.8;
+  const images: NonNullable<Edl["images"]> = (direction.images ?? [])
+    .filter((im) => words[im.word] && typeof im.path === "string")
+    .map((im) => ({ at: words[im.word].start, duration: imageDur, path: im.path }))
+    .sort((a, b) => a.at - b.at)
+    .filter((im, i, arr) => i === 0 || im.at - arr[i - 1].at >= imageDur);
+  const underImage = (t: number, before = 0.3) => images.some((im) => t >= im.at - before && t <= im.at + im.duration);
+  // la imagen ocupa la parte de arriba: ahí no van textos animados
+  for (let i = callouts.length - 1; i >= 0; i--) if (underImage(callouts[i].at, callouts[i].duration)) callouts.splice(i, 1);
+  const underCallout = (t: number) => underImage(t) || callouts.some((c) => t >= c.at - 0.3 && t <= c.at + c.duration);
 
   const emojiY = style.captions.position === "upper" ? 0.62 : 0.31;
   const emojis: Edl["emojis"] = (style.emojis.density === "none" ? [] : direction.emojis)
@@ -234,6 +245,7 @@ export function buildEdl(opts: {
       zooms.forEach((z) => sfx.push({ at: z.at, kind: style.sfx.onZoom as SfxKind }));
     if (style.sfx.onEmoji !== "none")
       emojis.forEach((e) => sfx.push({ at: e.at, kind: style.sfx.onEmoji as SfxKind }));
+    images.forEach((im) => sfx.push({ at: im.at, kind: "whoosh" }));
     if (style.sfx.onCut !== "none")
       segments.slice(1).forEach((s) => sfx.push({ at: s.start, kind: style.sfx.onCut as SfxKind }));
   }
@@ -257,6 +269,7 @@ export function buildEdl(opts: {
     sfx: sfxClean,
     hookTitle: hook,
     callouts,
+    images,
     cta: style.motion?.endCard ? (direction.cta ?? null) : null,
   };
 }

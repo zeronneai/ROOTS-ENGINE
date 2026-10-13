@@ -18,7 +18,31 @@ const DirectionSchema = z.object({
     .array(z.object({ word: z.number(), text: z.string().describe("1 a 3 palabras, máx 18 letras") }))
     .describe("Textos animados grandes que refuerzan una idea clave"),
   cta: z.string().nullable().describe("Llamado a la acción corto para el cierre (máx 5 palabras), o null"),
+  images: z
+    .array(z.object({ asset: z.number().describe("número de la imagen"), word: z.number() }))
+    .describe("En qué palabra aparece cada imagen marcada para mostrarse"),
 });
+
+export type EditAsset = { path: string; note?: string; use: "show" | "reference"; url?: string };
+
+/** Imágenes que no quedaron colocadas: repartidas después del título, separadas. */
+function placeMissing(words: Word[], removed: Set<number>, show: EditAsset[], placed: { path: string; word: number }[]) {
+  const missing = show.filter((a) => !placed.some((p) => p.path === a.path));
+  if (!missing.length) return placed;
+  const start = words.find((_, i) => !removed.has(i))?.start ?? 0;
+  const end = words[words.length - 1].end;
+  const out = [...placed];
+  missing.forEach((a, k) => {
+    const t = start + HOOK_SECONDS + ((end - start - HOOK_SECONDS - 2.8) * (k + 0.5)) / missing.length;
+    let best = -1;
+    words.forEach((w, i) => {
+      if (removed.has(i)) return;
+      if (best < 0 || Math.abs(w.start - t) < Math.abs(words[best].start - t)) best = i;
+    });
+    if (best >= 0) out.push({ path: a.path, word: best });
+  });
+  return out;
+}
 
 /**
  * Claude actúa como editor: decide qué cortar, qué resaltar, dónde hacer zoom y qué emojis poner,
@@ -31,9 +55,13 @@ export async function directEdit(opts: {
   idea?: { title: string; hooks: string[] } | null;
   /** instrucciones extra de quien subió el video ("pon el precio en grande", "más motion graphics") */
   notes?: string | null;
+  /** imágenes del cliente (con url firmada para que Claude las vea) */
+  assets?: EditAsset[];
 }): Promise<Direction> {
   const { words, style } = opts;
   if (!words.length) return heuristicDirection(words, style);
+  const assets = (opts.assets ?? []).slice(0, 8);
+  const show = assets.filter((a) => a.use === "show");
   const duration = words[words.length - 1].end;
   const target = targetCounts(style, duration);
   const targetZooms = target.zooms;
@@ -42,7 +70,8 @@ export async function directEdit(opts: {
   const numbered = words.map((w, i) => `${i}:${w.text}@${w.start.toFixed(2)}`).join(" ");
 
   try {
-    const out = await structured({
+    const ask = (withImages: boolean) => structured({
+      images: withImages ? assets.map((a) => a.url!).filter(Boolean) : undefined,
       schema: DirectionSchema,
       maxTokens: 4000,
       system: `${AGENCY_CONTEXT}
@@ -56,12 +85,20 @@ Decide:
 5) hookTitle: ${style.overlays.hookTitle ? "a punchy on-screen title for the first seconds that reinforces the hook, in the video's language" : "null"}.
 6) callouts: ${target.callouts ? `exactly ${target.callouts} big animated text graphics placed on key moments after the first ${HOOK_SECONDS} seconds and at least 2.5 seconds apart. Text of 1 to 3 words that sums up the idea (a number, result, benefit or twist), in the video's language. Not a copy of the full sentence.` : "return []"}.
 7) cta: ${style.motion.endCard ? "a short call to action for the closing card that fits what was said (ex: Agenda tu cita hoy, Visítanos este fin), in the video's language" : "null"}.
+8) images: ${show.length ? `place every image marked "show" (by its number) on the word where the speaker talks about it or where it best illustrates what is said. They appear for about 3 seconds, at least 3 seconds apart, not in the first ${HOOK_SECONDS} seconds.` : "return []"}
 Recorded mistakes are common: when the speaker restarts a sentence, cut the failed attempt(s) completely and keep the last complete one.
 Use only indexes that exist.`,
       user: `BRAND: ${json({ name: opts.brand.businessName, tone: opts.brand.voice?.tone, avoid: opts.brand.avoid })}
 IDEA: ${json(opts.idea ?? null)}
 ${opts.notes ? `EXTRA INSTRUCTIONS FROM THE CLIENT (follow them with the tools you have: cuts, emphasis, zooms, emojis, callouts, hook title, cta; you may go over the suggested amounts if they ask for more): ${json(opts.notes)}` : ""}
+${assets.length ? `CLIENT IMAGES (attached in this order, numbered from 0): ${json(assets.map((a, i) => ({ number: i, use: a.use === "show" ? "show in the video" : "reference only, to understand what they want", note: a.note || null })))}` : ""}
 TRANSCRIPT (${duration.toFixed(1)}s): ${numbered}`,
+    });
+    // si Claude no puede abrir las imágenes, lo intentamos sin verlas
+    const out = await ask(assets.some((a) => a.url)).catch((e) => {
+      if (!assets.some((a) => a.url)) throw e;
+      console.error("directEdit: sin imágenes", e);
+      return ask(false);
     });
 
     const n = words.length;
@@ -111,9 +148,18 @@ TRANSCRIPT (${duration.toFixed(1)}s): ${numbered}`,
       hookTitle: style.overlays.hookTitle ? out.hookTitle : null,
       callouts,
       cta: style.motion.endCard ? out.cta : null,
+      images: placeMissing(
+        words,
+        removeWords,
+        show,
+        out.images
+          .filter((im) => valid(im.word) && !removeWords.has(im.word) && assets[im.asset]?.use === "show")
+          .map((im) => ({ path: assets[im.asset].path, word: im.word })),
+      ),
     };
   } catch (err) {
     console.error("directEdit: usando heurística", err);
-    return heuristicDirection(words, style, opts.idea?.hooks?.[0] ?? null);
+    const h = heuristicDirection(words, style, opts.idea?.hooks?.[0] ?? null);
+    return { ...h, images: placeMissing(words, new Set(h.removeWords), show, []) };
   }
 }

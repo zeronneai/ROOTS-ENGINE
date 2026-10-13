@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { fmtDateTime } from "@/lib/time";
 import { loadClient } from "@/server/load";
 import { Empty, PageTitle } from "@/components/Shell";
 import { UploadRecording } from "@/components/UploadRecording";
@@ -58,7 +59,7 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold">{e.content_ideas?.title ?? e.recordings?.original_name}</div>
                     <div className="text-xs text-muted">
-                      {new Date(e.created_at).toLocaleString("es-MX")} · {e.mode === "auto" ? "Auto-edición" : "Equipo PRA"}
+                      {fmtDateTime(e.created_at)} · {e.mode === "auto" ? "Auto-edición" : "Equipo PRA"}
                     </div>
                     {e.error ? <div className="mt-1 text-xs text-bad">{e.error}</div> : null}
                   </div>

@@ -17,13 +17,15 @@ import type { EditStyle } from "../lib/styles/types";
 import { makeTimeMap } from "../lib/edl/build";
 import { Captions, type OutWord } from "./Captions";
 import { EMOJI_FONT_STACK, useFonts } from "./fonts";
-import { Burst, Callout, EndCard, ImpactLines, LowerThird } from "./Motion";
+import { Burst, Callout, EndCard, ImageCard, ImpactLines, LowerThird } from "./Motion";
 
 export type AutoEditProps = {
   src: string;
   edl: Edl;
   style: EditStyle;
   brand?: { name?: string; handle?: string };
+  /** ruta en Storage → URL firmada de las imágenes del cliente */
+  assetUrls?: Record<string, string>;
 };
 
 export const calculateAutoEditMetadata: CalculateMetadataFunction<AutoEditProps> = ({ props }) => {
@@ -38,7 +40,7 @@ export const calculateAutoEditMetadata: CalculateMetadataFunction<AutoEditProps>
 
 type Cut = { at: number; kind: EditStyle["transition"] };
 
-export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) => {
+export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, assetUrls }) => {
   const frame = useCurrentFrame();
   const { fps, width, durationInFrames } = useVideoConfig();
   const t = frame / fps;
@@ -80,6 +82,13 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
         .map((c) => ({ ...c, at: tm.toOutSnap(c.at) }))
         .filter((c): c is typeof c & { at: number } => c.at !== null),
     [edl.callouts, tm],
+  );
+  const images = useMemo(
+    () =>
+      (edl.images ?? [])
+        .map((im) => ({ ...im, at: tm.toOutSnap(im.at), url: assetUrls?.[im.path] }))
+        .filter((im): im is typeof im & { at: number; url: string } => im.at !== null && !!im.url),
+    [edl.images, tm, assetUrls],
   );
   const sfx = useMemo(
     () => edl.sfx.map((s) => ({ ...s, at: tm.toOutSnap(s.at) })).filter((s) => s.at !== null) as Edl["sfx"],
@@ -218,6 +227,13 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
             animation={style.emojis.animation}
             burst={style.motion.bursts ? style.captions.highlightColor : null}
           />
+        </Sequence>
+      ))}
+
+      {/* ── imágenes del cliente ── */}
+      {images.map((im, i) => (
+        <Sequence key={`i${i}`} from={Math.round(im.at * fps)} durationInFrames={Math.round(im.duration * fps)} premountFor={fps}>
+          <ImageCard src={im.url} style={style} index={i} />
         </Sequence>
       ))}
 

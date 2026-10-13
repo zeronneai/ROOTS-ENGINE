@@ -27,6 +27,7 @@ export function StyleLab(props: {
   hookTitle?: string | null;
   handle?: string | null;
   brandName?: string | null;
+  assetUrls?: Record<string, string>;
   niche?: string | null;
   brandAccent?: string | null;
   clientOverrides?: StyleOverrides | null;
@@ -82,6 +83,7 @@ export function StyleLab(props: {
           hookTitle={props.hookTitle}
           handle={props.handle}
           brandName={props.brandName}
+          assetUrls={props.assetUrls}
         />
         <p className="mt-3 text-center text-xs text-muted">
           Estilo activo: <span className="text-lavender">{style.name}</span>

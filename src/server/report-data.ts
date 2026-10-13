@@ -1,4 +1,5 @@
 import "server-only";
+import { fmtDate } from "@/lib/time";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Report } from "@/lib/ai/report";
 
@@ -31,7 +32,7 @@ export async function loadReportData(db: SupabaseClient, clientId: string) {
   );
   return {
     report: (row?.data as Report | undefined) ?? null,
-    date: row ? new Date(row.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" }) : null,
+    date: row ? fmtDate(row.created_at, { day: "numeric", month: "long", year: "numeric" }) : null,
     weekStart: (plan?.week_start as string | undefined) ?? null,
     ideas,
   };

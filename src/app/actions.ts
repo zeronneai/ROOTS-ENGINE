@@ -227,6 +227,8 @@ export async function registerRecordingAction(
     notes?: string;
     /** clips adicionales, en orden, que se unen después del primero */
     extraPaths?: string[];
+    /** imágenes que acompañan al video */
+    assets?: { path: string; note?: string; use: "show" | "reference" }[];
   },
 ) {
   const viewer = await requireClientAccess(clientId);
@@ -234,6 +236,10 @@ export async function registerRecordingAction(
   for (const p of [input.storagePath, ...extraPaths]) {
     if (typeof p !== "string" || !p.startsWith(`${clientId}/`) || p.includes("..")) throw new Error("Ruta inválida");
   }
+  const assets = (input.assets ?? []).slice(0, 10).map((a) => {
+    if (typeof a?.path !== "string" || !a.path.startsWith(`${clientId}/`) || a.path.includes("..")) throw new Error("Ruta inválida");
+    return { path: a.path, note: String(a.note ?? "").slice(0, 300), use: a.use === "reference" ? "reference" : "show" };
+  });
   const db = supabaseAdmin();
   if (viewer.role !== "agency") {
     const { data: c } = await db.from("clients").select("plan_tier").eq("id", clientId).single();
@@ -263,7 +269,8 @@ export async function registerRecordingAction(
     idea_id: input.ideaId,
     mode: input.mode,
     notes: input.notes?.trim().slice(0, 1000) || null,
-    extra_paths: extraPaths,
+    ...(extraPaths.length ? { extra_paths: extraPaths } : {}),
+    ...(assets.length ? { assets } : {}),
     status: "queued",
   });
   if (input.ideaId) await db.from("content_ideas").update({ status: "recorded" }).eq("id", input.ideaId).eq("client_id", clientId);

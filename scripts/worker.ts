@@ -14,10 +14,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { supabaseAdmin } from "../src/lib/supabase/admin";
 import { transcribeWords } from "../src/lib/transcribe";
-import { detectSilences, fitWordsToSilences, type Silence } from "../src/lib/silence";
+import { detectSilences, fitWordsToSilences, type AudioStats, type Silence } from "../src/lib/silence";
 import { directEdit } from "../src/lib/ai/direct-edit";
 import { moodFromDescription } from "../src/lib/ai/mood";
 import { mergeClips } from "../src/lib/merge-clips";
+import { assetUrlsForEdl, signedAssets } from "../src/lib/assets";
 import { sanitizeOverrides } from "../src/lib/styles/sanitize";
 import { deepMerge } from "../src/lib/styles/merge";
 import { buildEdl } from "../src/lib/edl/build";
@@ -37,6 +38,7 @@ export type StoredTranscript = {
   width: number;
   height: number;
   silences?: Silence[];
+  audio?: AudioStats | null;
   direction?: Direction;
 };
 
@@ -111,11 +113,12 @@ async function stepTranscribe() {
     const { data: client } = await db.from("clients").select("language").eq("id", edit.client_id).single();
     const t = await transcribeWords(file, client?.language);
     if (!t.words.length) throw new Error("No se detectó voz en el video");
-    const silences = detectSilences(file);
+    const { silences, stats } = detectSilences(file);
     const words = fitWordsToSilences(t.words, silences);
     const pauses = silences.filter((s) => s.end - s.start >= 0.3).length;
     console.log(`   ${words.length} palabras · ${pauses} pausas detectadas · "${t.text.slice(0, 70)}${t.text.length > 70 ? "..." : ""}"`);
-    const transcript: StoredTranscript = { text: t.text, words, silences, ...meta };
+    if (stats) console.log(`   audio: ruido ${stats.floorDb} dB · voz ${stats.speechDb} dB · corte bajo ${stats.thresholdDb} dB`);
+    const transcript: StoredTranscript = { text: t.text, words, silences, audio: stats, ...meta };
     await db.from("edits").update({ transcript, status: "directing" }).eq("id", edit.id);
   } catch (e) {
     await fail(edit.id, e);
@@ -148,12 +151,15 @@ async function stepDirect() {
     const style = styleForClient(ctx, { moodId: edit.mood_id, edit: overrides, presetId: edit.style_id });
     const tr = edit.transcript as StoredTranscript;
     const idea = edit.content_ideas ? { title: edit.content_ideas.title, hooks: edit.content_ideas.hooks } : null;
-    const direction = await directEdit({ words: tr.words, style, brand: ctx.brand.data, idea, notes });
+    const assets = await signedAssets(db, edit.assets);
+    if (assets.length) console.log(`   ${assets.length} imagen(es) del cliente`);
+    const direction = await directEdit({ words: tr.words, style, brand: ctx.brand.data, idea, notes, assets });
     const edl = buildEdl({ words: tr.words, sourceDuration: tr.duration, style, direction });
     const cutSecs = tr.duration - edl.segments.reduce((a, s) => a + s.end - s.start, 0);
     console.log(
       `   estilo ${style.name} · cortes: ${edl.segments.length - 1} (${cutSecs.toFixed(1)}s fuera, ${direction.removeWords.length} palabras malas)` +
-        ` · zooms: ${edl.zooms.length} · emojis: ${edl.emojis.length} · textos animados: ${edl.callouts?.length ?? 0}`,
+        ` · zooms: ${edl.zooms.length} · emojis: ${edl.emojis.length} · textos animados: ${edl.callouts?.length ?? 0}` +
+        ` · imágenes: ${edl.images?.length ?? 0}`,
     );
     await db
       .from("edits")
@@ -189,7 +195,13 @@ async function stepRender() {
     const out = path.join(dir, `${edit.id}.mp4`);
     let lastPct = -10;
     await renderAutoEdit(
-      { src: signed.signedUrl, edl: edit.edl, style, brand: { name: ctx.client.name, handle: ctx.client.instagram ?? undefined } },
+      {
+        src: signed.signedUrl,
+        edl: edit.edl,
+        style,
+        brand: { name: ctx.client.name, handle: ctx.client.instagram ?? undefined },
+        assetUrls: await assetUrlsForEdl(db, edit.edl),
+      },
       out,
       (p) => {
         const pct = Math.round(p * 100);

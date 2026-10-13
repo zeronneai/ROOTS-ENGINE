@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Easing, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import type { EditStyle } from "../lib/styles/types";
 import { EMOJI_FONT_STACK } from "./fonts";
 
@@ -418,6 +418,52 @@ export const EndCard: React.FC<{ cta?: string | null; handle?: string; style: Ed
           </div>
         ) : null}
       </div>
+    </AbsoluteFill>
+  );
+};
+
+// ───────────────────────────── Imágenes del cliente ─────────────────────────────
+
+/** Foto del cliente (producto, local, antes y después) que entra como tarjeta sobre el video. */
+export const ImageCard: React.FC<{ src: string; style: EditStyle; index: number }> = ({ src, style, index }) => {
+  const frame = useCurrentFrame();
+  const { fps, width, height, durationInFrames } = useVideoConfig();
+  const k = width / 1080;
+  const accent = accentOf(style);
+  const variant = style.motion.calloutStyle;
+  const p = spring({ frame, fps, config: { damping: 13, stiffness: 150 } });
+  const out = interpolate(frame, [durationInFrames - 8, durationInFrames], [0, 1], { extrapolateLeft: "clamp" });
+  const tilt = variant === "minimal" || variant === "bar" ? 0 : index % 2 === 0 ? -3 : 3;
+  const kenBurns = interpolate(frame, [0, durationInFrames], [1.0, 1.08]);
+  const upper = style.captions.position === "upper";
+  const w = 760 * k;
+  const h = Math.min(height * 0.4, 900 * k);
+  const radius = variant === "minimal" ? 4 * k : 28 * k;
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none" }}>
+      <div
+        style={{
+          position: "absolute",
+          left: (width - w) / 2,
+          top: upper ? height * 0.5 : height * 0.1,
+          width: w,
+          height: h,
+          transform: `translateY(${interpolate(p - out, [0, 1], [height * 0.25, 0])}px) rotate(${tilt * p}deg) scale(${interpolate(p, [0, 1], [0.7, 1])})`,
+          opacity: Math.min(1, p * 1.4) * (1 - out),
+          borderRadius: radius,
+          overflow: "hidden",
+          border: variant === "minimal" ? `${2 * k}px solid #FFFFFF` : `${10 * k}px solid ${variant === "sticker" ? "#FFFFFF" : accent}`,
+          boxShadow: variant === "sticker" ? `${12 * k}px ${14 * k}px 0 rgba(0,0,0,0.85)` : `0 ${24 * k}px ${60 * k}px rgba(0,0,0,0.55)`,
+          background: "#111",
+        }}
+      >
+        <Img src={src} style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${kenBurns})` }} />
+      </div>
+      {style.motion.bursts && variant !== "minimal" ? (
+        <div style={{ position: "absolute", left: width / 2, top: (upper ? height * 0.5 : height * 0.1) + h / 2, width: 0, height: 0 }}>
+          <Burst color={accent} size={w * 1.25} frame={frame} fps={fps} rays={14} />
+        </div>
+      ) : null}
     </AbsoluteFill>
   );
 };

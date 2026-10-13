@@ -16,6 +16,7 @@ export function UploadRecording(props: {
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState("");
+  const [images, setImages] = useState<{ file: File; url: string; note: string; use: "show" | "reference" }[]>([]);
   const [idea, setIdea] = useState(props.defaultIdea ?? "");
   const [mode, setMode] = useState<"auto" | "agency">(props.modes[0] ?? "auto");
   const [notes, setNotes] = useState("");
@@ -43,6 +44,15 @@ export function UploadRecording(props: {
         if (error) throw new Error(`${file.name}: ${error.message}`);
         paths.push(path);
       }
+      const assets: { path: string; note: string; use: "show" | "reference" }[] = [];
+      for (const [i, im] of images.entries()) {
+        setProgress(`Subiendo imagen ${i + 1} de ${images.length}...`);
+        const ext = im.file.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `${props.clientId}/img-${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabaseBrowser().storage.from("recordings").upload(path, im.file, { contentType: im.file.type || "image/jpeg" });
+        if (error) throw new Error(`${im.file.name}: ${error.message}`);
+        assets.push({ path, note: im.note, use: im.use });
+      }
       const name = files.length > 1 ? `${files[0].name} + ${files.length - 1} clip${files.length > 2 ? "s" : ""}` : files[0].name;
       await registerRecordingAction(props.clientId, {
         storagePath: paths[0],
@@ -51,8 +61,10 @@ export function UploadRecording(props: {
         ideaId: idea || null,
         mode,
         notes,
+        assets,
       });
       setFiles([]);
+      setImages([]);
       setNotes("");
       router.refresh();
     } catch (e) {
@@ -116,6 +128,52 @@ export function UploadRecording(props: {
           ))}
         </div>
       ) : null}
+      <div className="space-y-2">
+        <div className="label">Imágenes (opcional)</div>
+        {images.map((im, i) => (
+          <div key={`${im.file.name}-${i}`} className="flex gap-3 rounded-xl border border-line bg-cream p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={im.url} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <input
+                className="input !py-1.5 text-sm"
+                value={im.note}
+                placeholder="¿Qué es? Ej: el producto, el antes y después"
+                onChange={(e) => setImages(images.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))}
+              />
+              <div className="flex gap-1.5 text-xs">
+                {(["show", "reference"] as const).map((u) => (
+                  <button
+                    type="button"
+                    key={u}
+                    onClick={() => setImages(images.map((x, j) => (j === i ? { ...x, use: u } : x)))}
+                    className={`rounded-full border px-2.5 py-1 ${im.use === u ? "border-purple bg-purple text-white" : "border-line bg-white"}`}
+                  >
+                    {u === "show" ? "Que salga en el video" : "Solo referencia"}
+                  </button>
+                ))}
+                <button type="button" className="ml-auto px-1 text-bad" onClick={() => setImages(images.filter((_, j) => j !== i))} aria-label="Quitar">
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+        <label className="block cursor-pointer rounded-xl border border-dashed border-line px-4 py-3 text-center text-sm text-muted hover:border-purple">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const picked = Array.from(e.target.files ?? []).map((file) => ({ file, url: URL.createObjectURL(file), note: "", use: "show" as const }));
+              setImages((cur) => [...cur, ...picked].slice(0, 8));
+              e.target.value = "";
+            }}
+          />
+          + Agregar imágenes (foto del producto, del local, antes y después, una referencia de estilo...)
+        </label>
+      </div>
       <div>
         <div className="label mb-1">¿Algo extra para la edición? (opcional)</div>
         <textarea

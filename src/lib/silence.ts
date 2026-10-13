@@ -1,43 +1,60 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import type { Word } from "./edl/types";
 
 export type Silence = { start: number; end: number };
+export type AudioStats = { floorDb: number; speechDb: number; thresholdDb: number };
+
+const RATE = 16000;
+const FRAME = 320; // 20 ms
 
 /**
- * Detecta silencios reales en el audio con ffmpeg.
- * El umbral se adapta al volumen de cada video (un celular en la calle no suena igual que en un estudio).
+ * Detecta pausas midiendo el volumen del audio cada 20 ms.
+ * El umbral se calcula con el propio video: entre el ruido de fondo (lo más bajo) y la voz (lo más alto),
+ * así funciona igual en un estudio callado que grabando con el celular en la calle.
  */
-export function detectSilences(file: string, minMs = 180): Silence[] {
-  const vol = spawnSync("ffmpeg", ["-hide_banner", "-i", file, "-vn", "-af", "volumedetect", "-f", "null", "-"], {
-    encoding: "utf8",
-  }).stderr ?? "";
-  const mean = Number(/mean_volume:\s*(-?[\d.]+) dB/.exec(vol)?.[1]);
-  // silencio = 16 dB por debajo del promedio de la voz
-  const noise = Number.isFinite(mean) ? Math.max(-55, Math.min(-28, mean - 16)) : -38;
+export function detectSilences(file: string, minMs = 180): { silences: Silence[]; stats: AudioStats | null } {
+  const pcm = execFileSync("ffmpeg", ["-v", "error", "-i", file, "-vn", "-ac", "1", "-ar", String(RATE), "-f", "s16le", "-"], {
+    maxBuffer: 1024 * 1024 * 512,
+  });
+  const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.byteLength / 2));
+  const n = Math.floor(samples.length / FRAME);
+  if (n < 10) return { silences: [], stats: null };
 
-  const log = spawnSync(
-    "ffmpeg",
-    ["-hide_banner", "-i", file, "-vn", "-af", `silencedetect=noise=${noise.toFixed(1)}dB:d=${(minMs / 1000).toFixed(2)}`, "-f", "null", "-"],
-    { encoding: "utf8" },
-  ).stderr ?? "";
+  const db = new Float32Array(n);
+  for (let f = 0; f < n; f++) {
+    let sum = 0;
+    for (let i = f * FRAME; i < (f + 1) * FRAME; i++) sum += samples[i] * samples[i];
+    const rms = Math.sqrt(sum / FRAME) / 32768;
+    db[f] = 20 * Math.log10(Math.max(rms, 1e-6));
+  }
+  const sorted = Array.from(db).sort((a, b) => a - b);
+  const pct = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+  const floorDb = pct(0.08);
+  const speechDb = pct(0.92);
+  const spread = speechDb - floorDb;
+  // si casi no hay diferencia entre ruido y voz, usamos un margen fijo bajo la voz
+  const thresholdDb = spread < 12 ? speechDb - 14 : floorDb + Math.max(6, spread * 0.38);
 
-  const out: Silence[] = [];
-  let start: number | null = null;
-  for (const line of log.split(/\r?\n/)) {
-    const s = /silence_start:\s*(-?[\d.]+)/.exec(line);
-    if (s) start = Math.max(0, Number(s[1]));
-    const e = /silence_end:\s*([\d.]+)/.exec(line);
-    if (e && start !== null) {
-      out.push({ start, end: Number(e[1]) });
-      start = null;
+  const minFrames = Math.ceil(minMs / 20);
+  const silences: Silence[] = [];
+  let runStart = -1;
+  for (let f = 0; f <= n; f++) {
+    const quiet = f < n && db[f] < thresholdDb;
+    if (quiet && runStart < 0) runStart = f;
+    if (!quiet && runStart >= 0) {
+      if (f - runStart >= minFrames) silences.push({ start: +((runStart * FRAME) / RATE).toFixed(3), end: +((f * FRAME) / RATE).toFixed(3) });
+      runStart = -1;
     }
   }
-  return out;
+  return {
+    silences,
+    stats: { floorDb: +floorDb.toFixed(1), speechDb: +speechDb.toFixed(1), thresholdDb: +thresholdDb.toFixed(1) },
+  };
 }
 
 /**
  * Whisper local estira cada palabra hasta que empieza la siguiente, así que "no hay pausas".
- * Aquí recortamos cada palabra para que no se coma los silencios que sí midió ffmpeg.
+ * Aquí recortamos cada palabra para que no se coma los silencios medidos en el audio.
  */
 export function fitWordsToSilences(words: Word[], silences: Silence[]): Word[] {
   if (!silences.length) return words;

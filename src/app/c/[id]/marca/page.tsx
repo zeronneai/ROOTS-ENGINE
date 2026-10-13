@@ -1,4 +1,5 @@
 import { loadClient } from "@/server/load";
+import { fmtDate } from "@/lib/time";
 import { ApiButton } from "@/components/ApiButton";
 import { Empty, PageTitle } from "@/components/Shell";
 import { addBrandInputAction, deleteBrandInputAction } from "@/app/actions";
@@ -101,7 +102,7 @@ export default async function MarcaPage({ params }: { params: Promise<{ id: stri
                 <li key={i.id} className="border-b border-line/50 pb-3 text-sm last:border-0">
                   <div className="flex items-center gap-2">
                     <span className={`chip ${i.added_by_role === "client" ? "text-ok" : ""}`}>{i.added_by_role === "client" ? "Cliente" : "Agencia"}</span>
-                    <span className="text-xs text-muted">{new Date(i.created_at).toLocaleDateString("es-MX")}</span>
+                    <span className="text-xs text-muted">{fmtDate(i.created_at)}</span>
                     {!i.synthesized ? <span className="chip text-warn">nuevo</span> : null}
                     {isAgency ? (
                       <form action={deleteBrandInputAction.bind(null, id, i.id)} className="ml-auto">
