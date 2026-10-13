@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AGENCY_CONTEXT, json, structured } from "./claude";
 import type { BrandBrain, PostAnalysis } from "../types";
 
-export const ReportSchema = z.object({
+const F = {
   headline: z.string().describe("Diagnóstico en una frase, directo"),
   market: z.object({
     summary: z.string(),
@@ -29,7 +29,9 @@ export const ReportSchema = z.object({
     dreamOutcome: z.string().describe("El resultado soñado que el cliente final quiere"),
     coreOffer: z.string().describe("Qué se vende exactamente"),
     valueLevers: z.object({
-      likelihood: z.string().describe("Cómo aumentar la certeza de que sí va a funcionar (pruebas, testimonios, garantía)"),
+      likelihood: z
+        .string()
+        .describe("Cómo aumentar la certeza de que sí va a funcionar (pruebas, testimonios, garantía)"),
       speed: z.string().describe("Cómo hacer que el resultado llegue más rápido"),
       effort: z.string().describe("Cómo quitarle esfuerzo y sacrificio al cliente"),
     }),
@@ -62,7 +64,13 @@ export const ReportSchema = z.object({
   ),
   strategy: z.object({
     positioning: z.string().describe("Cómo se debe posicionar en una o dos frases"),
-    pillars: z.array(z.object({ name: z.string(), share: z.number().describe("porcentaje del contenido, suman 100"), description: z.string() })),
+    pillars: z.array(
+      z.object({
+        name: z.string(),
+        share: z.number().describe("porcentaje del contenido, suman 100"),
+        description: z.string(),
+      }),
+    ),
     cadence: z.string().describe("Cuántos videos por semana y en qué plataformas"),
     toneGuide: z.string(),
     hooksToTest: z.array(z.string()).describe("8 hooks listos para grabar, en el idioma de la marca"),
@@ -77,7 +85,14 @@ export const ReportSchema = z.object({
   }),
   kpis: z.array(z.object({ metric: z.string(), target: z.string(), why: z.string() })),
   next30Days: z.array(z.object({ week: z.number(), focus: z.string() })),
-});
+};
+
+// Se divide en 4 llamadas en paralelo: un solo esquema gigante excede el límite de salida estructurada.
+const PartA = z.object({ headline: F.headline, market: F.market, competitors: F.competitors });
+const PartD = z.object({ brandAudit: F.brandAudit, digitalPresence: F.digitalPresence });
+const PartB = z.object({ offer: F.offer, opportunities: F.opportunities, strategy: F.strategy });
+const PartC = z.object({ recordingGuide: F.recordingGuide, kpis: F.kpis, next30Days: F.next30Days });
+export const ReportSchema = z.object(F);
 export type Report = Omit<z.infer<typeof ReportSchema>, "offer" | "digitalPresence"> &
   Partial<Pick<z.infer<typeof ReportSchema>, "offer" | "digitalPresence">>;
 
@@ -100,10 +115,11 @@ export async function buildReport(opts: {
   competitors: { handle: string; platform: string; kind: string; note: string | null; medianViews: number | null }[];
   winners: { handle: string; views: number | null; outlier_score: number | null; analysis: PostAnalysis | null }[];
 }) {
-  return structured({
-    schema: ReportSchema,
-    maxTokens: 12000,
-    system: `${AGENCY_CONTEXT}
+  const ask = <S extends z.ZodType>(schema: S, focus: string, maxTokens: number) =>
+    structured({
+      schema,
+      maxTokens,
+      system: `${AGENCY_CONTEXT}
 
 You are PRA's head strategist writing the content strategy report for a client. The PRA team will film the client themselves (the client may not even know this engine exists), so the recording guide is for PRA's crew and for the owner on camera.
 Be specific and evidence based: cite competitors, numbers and the analyzed winning videos.
@@ -111,8 +127,9 @@ The "offer" section uses Alex Hormozi's Grand Slam Offer method: an offer so goo
 The "market" section must use the local Google Maps market: who dominates locally (ratings, review volume), how the client ranks against them, and what that means.
 The "digitalPresence" section must evaluate their Google profile too (rating, number of reviews vs local competitors, hours, website link, recurring themes in reviews). If they are not on Google, that is a high priority issue.
 The "digitalPresence" section diagnoses where their online presence is failing: posting consistency, content quality vs competitors, calls to action, website clarity, contact options. Only judge what the data shows; list anything you could not check (e.g. Google reviews, Facebook) in notChecked. No generic marketing advice. If data is missing, say so and give the best recommendation anyway.
-Everything in Spanish (Mexican, casual but professional). hooksToTest in the language the brand should post in.`,
-    user: `CLIENT: ${json(opts.client)}
+Everything in Spanish (Mexican, casual but professional). hooksToTest in the language the brand should post in.
+In this call write ONLY these sections: ${focus}.`,
+      user: `CLIENT: ${json(opts.client)}
 
 BRAND BRAIN: ${json(opts.brand)}
 
@@ -125,5 +142,13 @@ THEIR TOP POSTS: ${json(opts.ownTopPosts)}
 ACCOUNTS WE WATCH: ${json(opts.competitors)}
 
 WINNING VIDEOS (analyzed): ${json(opts.winners)}`,
-  });
+    });
+
+  const [a, d, b, c] = await Promise.all([
+    ask(PartA, "headline, market, competitors", 6000),
+    ask(PartD, "brandAudit, digitalPresence", 5000),
+    ask(PartB, "offer, opportunities, strategy", 7000),
+    ask(PartC, "recordingGuide, kpis, next30Days", 5000),
+  ]);
+  return { ...a, ...d, ...b, ...c };
 }
