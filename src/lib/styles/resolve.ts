@@ -62,6 +62,7 @@ export function applyEnergy(style: EditStyle, energy: number): EditStyle {
       intensity: +(1 + (style.zoom.intensity - 1) * f).toFixed(3),
     },
     emojis: { density: nextDensity },
+    motion: { level: DENSITIES[Math.max(0, Math.min(3, DENSITIES.indexOf(style.motion.level) + Math.round(e / 1.5)))] },
     pacing: { cutSilencesOverMs: Math.round(style.pacing.cutSilencesOverMs / f) },
   });
 }

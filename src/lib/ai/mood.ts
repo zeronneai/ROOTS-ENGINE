@@ -18,6 +18,7 @@ const MoodSchema = z.object({
   sfxEnabled: z.boolean().nullable(),
   colorGradeFilter: z.string().nullable().describe("CSS filter, ej: contrast(1.1) saturate(0.9)"),
   transition: z.enum(["none", "flash", "whip", "glitch", "fade"]).nullable(),
+  motionLevel: z.enum(["none", "low", "medium", "high"]).nullable().describe("Cuántos textos animados y efectos (motion graphics)"),
   toneNotes: z.string().describe("Cómo cambia el tono de los guiones con este mood"),
 });
 
@@ -58,6 +59,7 @@ REFERENCES: ${json(opts.references ?? [])}`,
   if (m.sfxEnabled !== null) overrides.sfx = { enabled: m.sfxEnabled };
   if (m.colorGradeFilter) overrides.grade = { filter: m.colorGradeFilter };
   if (m.transition) overrides.transition = m.transition;
+  if (m.motionLevel) overrides.motion = { level: m.motionLevel };
   if (m.highlightColor) overrides.overlays = { progressColor: m.highlightColor };
 
   const presetId = m.presetId && PRESETS.some((p) => p.id === m.presetId) ? m.presetId : null;

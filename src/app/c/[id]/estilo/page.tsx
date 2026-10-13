@@ -36,6 +36,7 @@ export default async function EstiloPage({ params }: { params: Promise<{ id: str
         niche={client.niche}
         brandAccent={brand.data.visual?.accentColor ?? null}
         handle={client.instagram}
+        brandName={client.name}
         moods={moods}
         activeMoodId={brand.active_mood_id}
         initial={{ presetId: client.edit_style_id, moodId: brand.active_mood_id, overrides: brand.style_overrides ?? {} }}

@@ -72,6 +72,7 @@ const BASE: EditStyle = {
     hookTitleBg: "#FFFFFF",
     handle: false,
   },
+  motion: { level: "medium", calloutStyle: "sticker", bursts: true, lowerThird: false, endCard: true },
   transition: "flash",
 };
 
@@ -94,6 +95,7 @@ export const PRESETS: EditStyle[] = [
     grade: { filter: "contrast(1.18) saturate(1.1)", vignette: 0.4, grain: 0.12 },
     pacing: { cutSilencesOverMs: 220 },
     overlays: { progressColor: "#FFD60A", hookTitleFont: "Anton", hookTitleBg: "#FFD60A" },
+    motion: { level: "high", calloutStyle: "sticker", bursts: true },
     transition: "glitch",
   }),
   define({
@@ -115,6 +117,7 @@ export const PRESETS: EditStyle[] = [
       progressBar: false, hookTitleFont: "Playfair Display", hookTitleColor: "#FFFFFF",
       hookTitleBg: "rgba(10,10,14,0.85)", handle: true,
     },
+    motion: { level: "low", calloutStyle: "bar", bursts: false, lowerThird: true },
     transition: "fade",
   }),
   define({
@@ -133,6 +136,7 @@ export const PRESETS: EditStyle[] = [
     grade: { filter: "brightness(1.05) saturate(0.95) contrast(0.98)", vignette: 0.12, tint: "rgba(255,190,170,0.06)" },
     pacing: { cutSilencesOverMs: 380, keepPaddingMs: 120 },
     overlays: { progressColor: "#F9C6CF", hookTitleFont: "Playfair Display", hookTitleBg: "#FFF5F7", hookTitleColor: "#5B2333" },
+    motion: { level: "medium", calloutStyle: "glow", bursts: true, lowerThird: true },
     transition: "fade",
   }),
   define({
@@ -149,6 +153,7 @@ export const PRESETS: EditStyle[] = [
     sfx: { onZoom: "boom", onEmoji: "pop" },
     grade: { filter: "saturate(1.32) contrast(1.1)", vignette: 0.25 },
     overlays: { progressColor: "#FF7A00", hookTitleFont: "Luckiest Guy", hookTitleBg: "#FF7A00", hookTitleColor: "#1A0A00" },
+    motion: { level: "high", calloutStyle: "sticker", bursts: true },
     transition: "whip",
   }),
   define({
@@ -166,6 +171,7 @@ export const PRESETS: EditStyle[] = [
     grade: { filter: "contrast(1.25) saturate(0.85)", vignette: 0.45, grain: 0.2 },
     pacing: { cutSilencesOverMs: 200 },
     overlays: { progressColor: "#FF2D2D", hookTitleFont: "Bebas Neue", hookTitleBg: "#FF2D2D", hookTitleColor: "#FFFFFF" },
+    motion: { level: "high", calloutStyle: "sticker", bursts: true },
     transition: "flash",
   }),
   define({
@@ -182,6 +188,7 @@ export const PRESETS: EditStyle[] = [
     sfx: { onZoom: "whoosh", onEmoji: "pop" },
     grade: { filter: "saturate(1.25) contrast(1.1) hue-rotate(-8deg)", vignette: 0.45, tint: "rgba(120,40,200,0.10)" },
     overlays: { progressColor: "#FF3CAC", hookTitleFont: "Bungee", hookTitleBg: "#FF3CAC", hookTitleColor: "#1B0030" },
+    motion: { level: "high", calloutStyle: "glow", bursts: true },
     transition: "glitch",
   }),
   define({
@@ -199,6 +206,7 @@ export const PRESETS: EditStyle[] = [
     sfx: { volume: 0.35, onZoom: "none", onEmoji: "ding" },
     grade: { filter: "brightness(1.05) saturate(1.02)", vignette: 0.1 },
     overlays: { progressColor: "#2DD4BF", hookTitleFont: "Nunito", hookTitleBg: "#2DD4BF", hookTitleColor: "#062830" },
+    motion: { level: "medium", calloutStyle: "bar", bursts: true, lowerThird: true },
     transition: "fade",
   }),
   define({
@@ -220,6 +228,7 @@ export const PRESETS: EditStyle[] = [
       progressBar: false, hookTitleFont: "Cormorant Garamond", hookTitleBg: "transparent",
       hookTitleColor: "#FFFFFF", handle: true,
     },
+    motion: { level: "low", calloutStyle: "minimal", bursts: false, lowerThird: true },
     transition: "fade",
   }),
   define({
@@ -236,6 +245,7 @@ export const PRESETS: EditStyle[] = [
     sfx: { onZoom: "whoosh", onEmoji: "click" },
     grade: { filter: "sepia(0.22) contrast(1.12) saturate(0.95)", vignette: 0.45, grain: 0.18 },
     overlays: { progressColor: "#F59E0B", hookTitleFont: "Rye", hookTitleBg: "#F5E6C8", hookTitleColor: "#2B1608" },
+    motion: { level: "medium", calloutStyle: "sticker", bursts: false },
     transition: "whip",
   }),
   define({

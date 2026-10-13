@@ -77,6 +77,7 @@ export default function Home() {
             duration={DEMO_DURATION}
             hookTitle="El secreto que nadie te dice"
             handle="purplerootsagency"
+            brandName="Purple Roots"
           />
         </div>
       </section>

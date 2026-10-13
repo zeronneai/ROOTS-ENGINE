@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { supabaseAdmin } from "../src/lib/supabase/admin";
 import { transcribeWords } from "../src/lib/transcribe";
+import { detectSilences, fitWordsToSilences, type Silence } from "../src/lib/silence";
 import { directEdit } from "../src/lib/ai/direct-edit";
 import { buildEdl } from "../src/lib/edl/build";
 import { getClientContext, styleForClient } from "../src/server/engine";
@@ -31,6 +32,7 @@ export type StoredTranscript = {
   duration: number;
   width: number;
   height: number;
+  silences?: Silence[];
   direction?: Direction;
 };
 
@@ -92,7 +94,11 @@ async function stepTranscribe() {
     const { data: client } = await db.from("clients").select("language").eq("id", edit.client_id).single();
     const t = await transcribeWords(file, client?.language);
     if (!t.words.length) throw new Error("No se detectó voz en el video");
-    const transcript: StoredTranscript = { text: t.text, words: t.words, ...meta };
+    const silences = detectSilences(file);
+    const words = fitWordsToSilences(t.words, silences);
+    const pauses = silences.filter((s) => s.end - s.start >= 0.3).length;
+    console.log(`   ${words.length} palabras · ${pauses} pausas detectadas · "${t.text.slice(0, 70)}${t.text.length > 70 ? "..." : ""}"`);
+    const transcript: StoredTranscript = { text: t.text, words, silences, ...meta };
     await db.from("edits").update({ transcript, status: "directing" }).eq("id", edit.id);
   } catch (e) {
     await fail(edit.id, e);
@@ -114,6 +120,11 @@ async function stepDirect() {
     const idea = edit.content_ideas ? { title: edit.content_ideas.title, hooks: edit.content_ideas.hooks } : null;
     const direction = await directEdit({ words: tr.words, style, brand: ctx.brand.data, idea });
     const edl = buildEdl({ words: tr.words, sourceDuration: tr.duration, style, direction });
+    const cutSecs = tr.duration - edl.segments.reduce((a, s) => a + s.end - s.start, 0);
+    console.log(
+      `   estilo ${style.name} · cortes: ${edl.segments.length - 1} (${cutSecs.toFixed(1)}s fuera, ${direction.removeWords.length} palabras malas)` +
+        ` · zooms: ${edl.zooms.length} · emojis: ${edl.emojis.length} · textos animados: ${edl.callouts?.length ?? 0}`,
+    );
     await db
       .from("edits")
       .update({

@@ -44,5 +44,11 @@ export const EdlSchema = z.object({
   ),
   sfx: z.array(z.object({ at: z.number(), kind: SfxKind })),
   hookTitle: z.object({ text: z.string(), duration: z.number() }).nullable(),
+  /** textos animados (motion graphics) en momentos clave */
+  callouts: z
+    .array(z.object({ at: z.number(), duration: z.number(), text: z.string(), kind: z.enum(["keyword", "number"]) }))
+    .optional(),
+  /** llamado a la acción del cierre */
+  cta: z.string().nullable().optional(),
 });
 export type Edl = z.infer<typeof EdlSchema>;

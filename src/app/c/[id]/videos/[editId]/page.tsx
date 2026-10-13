@@ -51,6 +51,7 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
           clientOverrides={brand.style_overrides}
           moods={moods}
           handle={client.instagram}
+          brandName={client.name}
           initial={{ presetId: edit.style_id ?? client.edit_style_id, moodId: edit.mood_id ?? brand.active_mood_id, overrides: (edit.style_overrides ?? {}) as StyleOverrides }}
           canApprove={["review", "done", "failed"].includes(edit.status)}
         />

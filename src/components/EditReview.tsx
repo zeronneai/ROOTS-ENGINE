@@ -19,6 +19,7 @@ export function EditReview(props: {
   moods: { id: string; name: string; style_overrides: StyleOverrides }[];
   initial: LabState;
   handle: string | null;
+  brandName?: string | null;
   canApprove: boolean;
 }) {
   const router = useRouter();
@@ -55,6 +56,7 @@ export function EditReview(props: {
       duration={props.duration}
       direction={direction}
       handle={props.handle}
+      brandName={props.brandName}
       niche={props.niche}
       brandAccent={props.brandAccent}
       clientOverrides={props.clientOverrides}

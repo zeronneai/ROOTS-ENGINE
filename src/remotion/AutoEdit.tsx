@@ -17,6 +17,7 @@ import type { EditStyle } from "../lib/styles/types";
 import { makeTimeMap } from "../lib/edl/build";
 import { Captions, type OutWord } from "./Captions";
 import { EMOJI_FONT_STACK, useFonts } from "./fonts";
+import { Burst, Callout, EndCard, ImpactLines, LowerThird } from "./Motion";
 
 export type AutoEditProps = {
   src: string;
@@ -73,6 +74,13 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
     () => edl.emojis.map((e) => ({ ...e, at: tm.toOutSnap(e.at) })).filter((e) => e.at !== null) as (Edl["emojis"][number])[],
     [edl.emojis, tm],
   );
+  const callouts = useMemo(
+    () =>
+      (edl.callouts ?? [])
+        .map((c) => ({ ...c, at: tm.toOutSnap(c.at) }))
+        .filter((c): c is typeof c & { at: number } => c.at !== null),
+    [edl.callouts, tm],
+  );
   const sfx = useMemo(
     () => edl.sfx.map((s) => ({ ...s, at: tm.toOutSnap(s.at) })).filter((s) => s.at !== null) as Edl["sfx"],
     [edl.sfx, tm],
@@ -104,6 +112,7 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
   let zoomScale = 1;
   let shakeX = 0;
   let shakeY = 0;
+  let impact: number | null = null;
   for (const z of zooms) {
     const local = t - z.at;
     if (local < 0 || local > z.duration) continue;
@@ -118,6 +127,7 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
       const inP = interpolate(local, [0, 0.08], [0, 1], { extrapolateRight: "clamp", easing: Easing.out(Easing.quad) });
       const outP = interpolate(local, [z.duration - 0.1, z.duration], [1, 0], { extrapolateLeft: "clamp" });
       zoomScale = 1 + (target - 1) * Math.min(inP, outP);
+      if (style.motion.bursts && target >= style.zoom.intensity - 0.001 && local < 0.3) impact = local / 0.3;
       if (kind === "shake" && local < 0.35) {
         const amp = (1 - local / 0.35) * 14 * k;
         shakeX = Math.sin(frame * 2.7) * amp;
@@ -144,6 +154,13 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
   }
 
   const progress = frame / Math.max(1, durationInFrames - 1);
+
+  // marca al inicio (después del título) y cierre al final
+  const showLowerThird = style.motion.lowerThird && !!brand?.name && durationInFrames > fps * 7;
+  const lowerFrom = Math.round(((edl.hookTitle?.duration ?? 0) + 0.3) * fps);
+  const lowerDur = Math.round(3.2 * fps);
+  const endFrom = Math.max(0, durationInFrames - Math.round(2.2 * fps));
+  const showEnd = style.motion.endCard && !!(edl.cta || brand?.handle) && durationInFrames > fps * 6;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000", overflow: "hidden" }}>
@@ -187,10 +204,27 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
         <AbsoluteFill style={{ background: "#fff", opacity: interpolate(cutFx.p, [0, 1], [0.75, 0]) }} />
       ) : null}
 
+      {/* ── líneas de impacto en zooms fuertes ── */}
+      {impact !== null ? <ImpactLines p={impact} /> : null}
+
       {/* ── emojis ── */}
       {emojis.map((e, i) => (
         <Sequence key={`e${i}`} from={Math.round(e.at * fps)} durationInFrames={Math.round(e.duration * fps)}>
-          <Emoji emoji={e.emoji} x={e.x} y={e.y} size={style.emojis.sizePx * k} animation={style.emojis.animation} />
+          <Emoji
+            emoji={e.emoji}
+            x={e.x}
+            y={e.y}
+            size={style.emojis.sizePx * k}
+            animation={style.emojis.animation}
+            burst={style.motion.bursts ? style.captions.highlightColor : null}
+          />
+        </Sequence>
+      ))}
+
+      {/* ── textos animados ── */}
+      {callouts.map((c, i) => (
+        <Sequence key={`c${i}`} from={Math.round(c.at * fps)} durationInFrames={Math.round(c.duration * fps)}>
+          <Callout text={c.text} kind={c.kind} style={style} />
         </Sequence>
       ))}
 
@@ -201,6 +235,20 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
       {edl.hookTitle ? (
         <Sequence durationInFrames={Math.round(edl.hookTitle.duration * fps)}>
           <HookTitle text={edl.hookTitle.text} style={style} />
+        </Sequence>
+      ) : null}
+
+      {/* ── nombre del negocio ── */}
+      {showLowerThird ? (
+        <Sequence from={lowerFrom} durationInFrames={lowerDur}>
+          <LowerThird name={brand!.name!} handle={brand?.handle} style={style} />
+        </Sequence>
+      ) : null}
+
+      {/* ── cierre con llamado a la acción ── */}
+      {showEnd ? (
+        <Sequence from={endFrom} durationInFrames={durationInFrames - endFrom}>
+          <EndCard cta={edl.cta} handle={brand?.handle} style={style} />
         </Sequence>
       ) : null}
 
@@ -220,7 +268,7 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
       ) : null}
 
       {/* ── @handle ── */}
-      {style.overlays.handle && brand?.handle ? (
+      {style.overlays.handle && brand?.handle && !(showLowerThird && frame < lowerFrom + lowerDur) && !(showEnd && frame >= endFrom) ? (
         <div
           style={{
             position: "absolute",
@@ -248,13 +296,14 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand }) =>
   );
 };
 
-const Emoji: React.FC<{ emoji: string; x: number; y: number; size: number; animation: EditStyle["emojis"]["animation"] }> = ({
-  emoji,
-  x,
-  y,
-  size,
-  animation,
-}) => {
+const Emoji: React.FC<{
+  emoji: string;
+  x: number;
+  y: number;
+  size: number;
+  animation: EditStyle["emojis"]["animation"];
+  burst?: string | null;
+}> = ({ emoji, x, y, size, animation, burst }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 9, stiffness: 220 } });
@@ -266,6 +315,12 @@ const Emoji: React.FC<{ emoji: string; x: number; y: number; size: number; anima
   if (animation === "drop") transform = `translateY(${interpolate(enter, [0, 1], [-height * 0.25, 0])}px)`;
 
   return (
+    <>
+      {burst ? (
+        <div style={{ position: "absolute", left: x * width, top: y * height, width: 0, height: 0 }}>
+          <Burst color={burst} size={size * 2.6} frame={frame} fps={fps} rays={10} />
+        </div>
+      ) : null}
     <div
       style={{
         position: "absolute",
@@ -281,6 +336,7 @@ const Emoji: React.FC<{ emoji: string; x: number; y: number; size: number; anima
     >
       {emoji}
     </div>
+    </>
   );
 };
 

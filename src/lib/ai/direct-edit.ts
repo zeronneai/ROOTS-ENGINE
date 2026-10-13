@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AGENCY_CONTEXT, json, structured } from "./claude";
 import type { Direction } from "../edl/build";
-import { heuristicDirection } from "../edl/build";
+import { heuristicDirection, HOOK_SECONDS, pickCallouts, pickEmojis, targetCounts } from "../edl/build";
 import type { Word } from "../edl/types";
 import type { EditStyle } from "../styles/types";
 import type { BrandBrain } from "../types";
@@ -14,9 +14,11 @@ const DirectionSchema = z.object({
   zooms: z.array(z.object({ word: z.number(), strength: z.enum(["soft", "hard"]) })),
   emojis: z.array(z.object({ word: z.number(), emoji: z.string() })),
   hookTitle: z.string().nullable().describe("Texto corto (máx 7 palabras) para el título de los primeros segundos, o null"),
+  callouts: z
+    .array(z.object({ word: z.number(), text: z.string().describe("1 a 3 palabras, máx 18 letras") }))
+    .describe("Textos animados grandes que refuerzan una idea clave"),
+  cta: z.string().nullable().describe("Llamado a la acción corto para el cierre (máx 5 palabras), o null"),
 });
-
-const EMOJIS_PER_MIN = { none: 0, low: 4, medium: 8, high: 14 };
 
 /**
  * Claude actúa como editor: decide qué cortar, qué resaltar, dónde hacer zoom y qué emojis poner,
@@ -31,8 +33,9 @@ export async function directEdit(opts: {
   const { words, style } = opts;
   if (!words.length) return heuristicDirection(words, style);
   const duration = words[words.length - 1].end;
-  const targetZooms = style.zoom.enabled ? Math.round(duration / style.zoom.everySeconds) : 0;
-  const targetEmojis = Math.round((duration / 60) * EMOJIS_PER_MIN[style.emojis.density]);
+  const target = targetCounts(style, duration);
+  const targetZooms = target.zooms;
+  const targetEmojis = target.emojis;
 
   const numbered = words.map((w, i) => `${i}:${w.text}@${w.start.toFixed(2)}`).join(" ");
 
@@ -49,6 +52,9 @@ Decide:
 3) zooms: about ${targetZooms} punch-ins on moments of emphasis or new ideas. ${style.zoom.enabled ? "" : "Zooms are disabled: return []."}
 4) emojis: about ${targetEmojis} total${targetEmojis === 0 ? " (return [])" : ""}, only where an emoji adds meaning. Prefer this palette when it fits: ${style.emojis.palette.join(" ")}. Fit the brand: ${style.name} style, "${style.description}".
 5) hookTitle: ${style.overlays.hookTitle ? "a punchy on-screen title for the first seconds that reinforces the hook, in the video's language" : "null"}.
+6) callouts: ${target.callouts ? `exactly ${target.callouts} big animated text graphics placed on key moments after the first ${HOOK_SECONDS} seconds and at least 2.5 seconds apart. Text of 1 to 3 words that sums up the idea (a number, result, benefit or twist), in the video's language. Not a copy of the full sentence.` : "return []"}.
+7) cta: ${style.motion.endCard ? "a short call to action for the closing card that fits what was said (ex: Agenda tu cita hoy, Visítanos este fin), in the video's language" : "null"}.
+Recorded mistakes are common: when the speaker restarts a sentence, cut the failed attempt(s) completely and keep the last complete one.
 Use only indexes that exist.`,
       user: `BRAND: ${json({ name: opts.brand.businessName, tone: opts.brand.voice?.tone, avoid: opts.brand.avoid })}
 IDEA: ${json(opts.idea ?? null)}
@@ -63,17 +69,45 @@ TRANSCRIPT (${duration.toFixed(1)}s): ${numbered}`,
       const b = Math.min(n - 1, Math.max(r.fromWord, r.toWord));
       for (let i = a; i <= b; i++) removeWords.add(i);
     }
-    // seguro: nunca borrar más del 40%
-    if (removeWords.size > n * 0.4) removeWords.clear();
+    // seguro: nunca borrar más del 65%. Si se pasa, se quedan los cortes más chicos (muletillas, tropiezos).
+    if (removeWords.size > n * 0.65) {
+      removeWords.clear();
+      const ranges = out.badTakes
+        .map((r) => [Math.max(0, Math.min(r.fromWord, r.toWord)), Math.min(n - 1, Math.max(r.fromWord, r.toWord))] as const)
+        .sort((a, b) => a[1] - a[0] - (b[1] - b[0]));
+      for (const [a, b] of ranges) {
+        if (removeWords.size + (b - a + 1) > n * 0.65) break;
+        for (let i = a; i <= b; i++) removeWords.add(i);
+      }
+    }
+
+    const emphasis = out.emphasis.filter(valid).filter((i) => !removeWords.has(i));
+    let emojis = style.emojis.density === "none" ? [] : out.emojis.filter((e) => valid(e.word) && !removeWords.has(e.word));
+    // si Claude se quedó corto de emojis, completamos con la heurística
+    if (emojis.length < targetEmojis) {
+      const extra = pickEmojis(words, removeWords, new Set(emphasis), style, targetEmojis - emojis.length, emojis.map((e) => e.word));
+      emojis = [...emojis, ...extra].sort((a, b) => a.word - b.word);
+    }
+    let callouts = target.callouts ? out.callouts.filter((c) => valid(c.word) && !removeWords.has(c.word) && c.text.trim()) : [];
+    if (callouts.length < target.callouts) {
+      const extra = pickCallouts(words, removeWords, emphasis, target.callouts).filter(
+        (x) => !callouts.some((c) => Math.abs(words[c.word].start - words[x.word].start) < 2.5),
+      );
+      callouts = [...callouts, ...extra].slice(0, target.callouts);
+    }
+    let zooms: Direction["zooms"] = out.zooms.filter((z) => valid(z.word) && !removeWords.has(z.word)).map((z) => ({ word: z.word, strength: z.strength }));
+    if (style.zoom.enabled && zooms.length < Math.ceil(targetZooms / 2)) {
+      zooms = heuristicDirection(words, style).zooms.filter((z) => !removeWords.has(z.word));
+    }
 
     return {
       removeWords: [...removeWords],
-      emphasis: out.emphasis.filter(valid),
-      zooms: out.zooms
-        .filter((z) => valid(z.word))
-        .map((z) => ({ word: z.word, strength: z.strength })),
-      emojis: style.emojis.density === "none" ? [] : out.emojis.filter((e) => valid(e.word)),
+      emphasis,
+      zooms: style.zoom.enabled ? zooms : [],
+      emojis,
       hookTitle: style.overlays.hookTitle ? out.hookTitle : null,
+      callouts,
+      cta: style.motion.endCard ? out.cta : null,
     };
   } catch (err) {
     console.error("directEdit: usando heurística", err);

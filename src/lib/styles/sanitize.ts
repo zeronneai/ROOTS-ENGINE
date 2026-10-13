@@ -29,6 +29,7 @@ export function sanitizeOverrides(input: unknown): StyleOverrides {
   const g = isObj(input.grade) ? input.grade : {};
   const z = isObj(input.zoom) ? input.zoom : {};
   const o = isObj(input.overlays) ? input.overlays : {};
+  const m = isObj(input.motion) ? input.motion : {};
 
   const out: StyleOverrides = {
     energy: num(input.energy, -2, 2),
@@ -57,6 +58,13 @@ export function sanitizeOverrides(input: unknown): StyleOverrides {
       progressBar: bool(o.progressBar),
       hookTitle: bool(o.hookTitle),
       handle: bool(o.handle),
+    }),
+    motion: clean({
+      level: oneOf(m.level, ["none", "low", "medium", "high"] as const),
+      calloutStyle: oneOf(m.calloutStyle, ["sticker", "bar", "glow", "minimal"] as const),
+      bursts: bool(m.bursts),
+      lowerThird: bool(m.lowerThird),
+      endCard: bool(m.endCard),
     }),
   };
   return clean(out as Record<string, unknown>) ?? {};

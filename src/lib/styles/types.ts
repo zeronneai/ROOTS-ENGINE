@@ -13,6 +13,7 @@ export const ZoomStyle = z.enum(["punch", "smooth", "shake"]);
 export const EmojiAnimation = z.enum(["pop", "float", "spin", "drop"]);
 export const Transition = z.enum(["none", "flash", "whip", "glitch", "fade"]);
 export const Density = z.enum(["none", "low", "medium", "high"]);
+export const CalloutStyle = z.enum(["sticker", "bar", "glow", "minimal"]);
 
 export const EditStyleSchema = z.object({
   id: z.string(),
@@ -85,6 +86,15 @@ export const EditStyleSchema = z.object({
     hookTitleColor: z.string(),
     hookTitleBg: z.string(),
     handle: z.boolean(), // @usuario en esquina
+  }),
+
+  /** Motion graphics: textos animados, destellos, lower third y cierre con llamado a la acción. */
+  motion: z.object({
+    level: Density, // cuántos textos animados (callouts) por video
+    calloutStyle: CalloutStyle, // sticker = urbano, bar = corporativo, glow = lujo/noche, minimal = editorial
+    bursts: z.boolean(), // destellos detrás de emojis y líneas de impacto en zooms fuertes
+    lowerThird: z.boolean(), // nombre del negocio entrando abajo al inicio
+    endCard: z.boolean(), // cierre con llamado a la acción y @usuario
   }),
 
   transition: Transition,

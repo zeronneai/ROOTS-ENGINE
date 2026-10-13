@@ -15,6 +15,7 @@ export function StylePlayer(props: {
   direction?: Direction | null;
   hookTitle?: string | null;
   handle?: string | null;
+  brandName?: string | null;
   className?: string;
 }) {
   const { src, words, duration, style, direction, hookTitle, handle } = props;
@@ -30,7 +31,7 @@ export function StylePlayer(props: {
     <div className={props.className} style={{ aspectRatio: "9 / 16" }}>
       <Player
         component={AutoEdit}
-        inputProps={{ src, edl, style, brand: { handle: handle ?? undefined } }}
+        inputProps={{ src, edl, style, brand: { handle: handle ?? undefined, name: props.brandName ?? undefined } }}
         durationInFrames={frames}
         fps={edl.fps}
         compositionWidth={edl.width}

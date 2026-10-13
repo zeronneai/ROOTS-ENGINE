@@ -12,6 +12,10 @@ export type Direction = {
   zooms: { word: number; strength?: "soft" | "hard" }[];
   emojis: { word: number; emoji: string }[];
   hookTitle: string | null;
+  /** textos animados: palabra donde aparece y el texto corto que se muestra */
+  callouts?: { word: number; text: string }[];
+  /** llamado a la acción del cierre */
+  cta?: string | null;
 };
 
 const FILLERS = new Set([
@@ -42,6 +46,22 @@ const KEYWORD_EMOJI: Record<string, string> = {
 };
 
 const EMOJIS_PER_MINUTE = { none: 0, low: 4, medium: 8, high: 14 } as const;
+const EMOJIS_MIN = { none: 0, low: 2, medium: 3, high: 4 } as const;
+const CALLOUT_EVERY = { none: Infinity, low: 12, medium: 7, high: 4.5 } as const;
+const CALLOUT_MIN = { none: 0, low: 1, medium: 2, high: 3 } as const;
+/** el título del hook ocupa los primeros segundos: ahí no van textos animados */
+export const HOOK_SECONDS = 2.6;
+
+/** Cuántos zooms, emojis y textos animados le tocan a un video según su estilo y duración. */
+export function targetCounts(style: EditStyle, duration: number) {
+  const d = style.emojis.density;
+  const m = style.motion?.level ?? "none";
+  return {
+    zooms: style.zoom.enabled ? Math.max(2, Math.round(duration / style.zoom.everySeconds)) : 0,
+    emojis: d === "none" ? 0 : Math.max(EMOJIS_MIN[d], Math.round((duration / 60) * EMOJIS_PER_MINUTE[d])),
+    callouts: m === "none" ? 0 : Math.max(CALLOUT_MIN[m], Math.round(duration / CALLOUT_EVERY[m])),
+  };
+}
 
 export const norm = (w: string) =>
   w.toLowerCase().replace(/[^\p{L}\p{N}$%]/gu, "");
@@ -86,23 +106,63 @@ export function heuristicDirection(words: Word[], style: EditStyle, hookTitle?: 
     });
   }
 
-  const perMin = EMOJIS_PER_MINUTE[style.emojis.density];
-  if (perMin > 0) {
-    const gap = 60 / perMin;
-    let last = -Infinity;
-    let p = 0;
-    words.forEach((w, i) => {
-      if (removed.has(i) || w.start - last < gap) return;
-      const n = norm(w.text);
-      const dict = KEYWORD_EMOJI[n];
-      if (dict || (emphasis.includes(i) && style.emojis.palette.length)) {
-        emojis.push({ word: i, emoji: dict ?? style.emojis.palette[p++ % style.emojis.palette.length] });
-        last = w.start;
-      }
-    });
-  }
+  const duration = words.length ? words[words.length - 1].end : 0;
+  const target = targetCounts(style, duration);
+  emojis.push(...pickEmojis(words, removed, new Set(emphasis), style, target.emojis));
+  const callouts = pickCallouts(words, removed, emphasis, target.callouts);
 
-  return { removeWords, emphasis, zooms, emojis, hookTitle: hookTitle ?? null };
+  return { removeWords, emphasis, zooms, emojis, hookTitle: hookTitle ?? null, callouts, cta: null };
+}
+
+/** Emojis por heurística: primero palabras con emoji obvio, luego palabras clave, bien repartidos. */
+export function pickEmojis(
+  words: Word[],
+  removed: Set<number>,
+  emphasis: Set<number>,
+  style: EditStyle,
+  count: number,
+  taken: number[] = [],
+): Direction["emojis"] {
+  if (count <= 0 || !words.length) return [];
+  const duration = words[words.length - 1].end;
+  const gap = Math.max(1.2, Math.min(60 / (EMOJIS_PER_MINUTE[style.emojis.density] || 8), duration / (count + 0.5)));
+  const palette = style.emojis.palette.length ? style.emojis.palette : ["🔥", "💡", "✅", "👀", "🤯"];
+  const scored = words
+    .map((w, i) => {
+      const n = norm(w.text);
+      const score = KEYWORD_EMOJI[n] ? 3 : emphasis.has(i) ? 2 : n.length >= 6 ? 1 : 0;
+      return { i, t: w.start, score, emoji: KEYWORD_EMOJI[n] };
+    })
+    .filter((c) => !removed.has(c.i) && c.score > 0 && c.t > 0.4)
+    .sort((a, b) => b.score - a.score || a.t - b.t);
+  const used = taken.map((i) => words[i]?.start ?? -99);
+  const out: Direction["emojis"] = [];
+  let p = 0;
+  for (const c of scored) {
+    if (out.length >= count) break;
+    if (used.some((u) => Math.abs(u - c.t) < gap)) continue;
+    out.push({ word: c.i, emoji: c.emoji ?? palette[p++ % palette.length] });
+    used.push(c.t);
+  }
+  return out.sort((a, b) => a.word - b.word);
+}
+
+/** Textos animados por heurística: números y palabras clave, en mayúsculas. */
+export function pickCallouts(words: Word[], removed: Set<number>, emphasis: number[], count: number): NonNullable<Direction["callouts"]> {
+  if (count <= 0) return [];
+  const start = words.find((_, i) => !removed.has(i))?.start ?? 0;
+  const cands = [...emphasis, ...words.map((_, i) => i)]
+    .filter((i, k, arr) => arr.indexOf(i) === k && !removed.has(i) && words[i].start - start >= HOOK_SECONDS)
+    .map((i) => ({ i, score: /\d/.test(words[i].text) ? 3 : emphasis.includes(i) ? 2 : norm(words[i].text).length >= 7 ? 1 : 0 }))
+    .filter((c) => c.score > 0)
+    .sort((a, b) => b.score - a.score || a.i - b.i);
+  const out: NonNullable<Direction["callouts"]> = [];
+  for (const c of cands) {
+    if (out.length >= count) break;
+    if (out.some((o) => Math.abs(words[o.word].start - words[c.i].start) < 2.5)) continue;
+    out.push({ word: c.i, text: words[c.i].text.replace(/[.,;:!?¡¿"]/g, "").toUpperCase() });
+  }
+  return out.sort((a, b) => a.word - b.word);
 }
 
 // ───────────────────────────── EDL builder ────────────────────────────
@@ -141,9 +201,25 @@ export function buildEdl(opts: {
       return { at, duration: +dur.toFixed(3), scale: +scale.toFixed(3), kind: style.zoom.style };
     });
 
+  const firstStart = segments[0]?.start ?? 0;
+  const calloutDur = 1.7;
+  const callouts: NonNullable<Edl["callouts"]> = (style.motion?.level === "none" ? [] : direction.callouts ?? [])
+    .filter((c) => words[c.word] && !removed.has(c.word) && c.text.trim())
+    .map((c) => ({ at: words[c.word].start, text: c.text.trim().slice(0, 32) }))
+    .filter((c) => c.at - firstStart >= HOOK_SECONDS - 0.4)
+    .sort((a, b) => a.at - b.at)
+    .filter((c, i, arr) => i === 0 || c.at - arr[i - 1].at >= 2.2)
+    .map((c) => ({
+      at: c.at,
+      duration: calloutDur,
+      text: c.text,
+      kind: /\d/.test(c.text) ? ("number" as const) : ("keyword" as const),
+    }));
+  const underCallout = (t: number) => callouts.some((c) => t >= c.at - 0.3 && t <= c.at + c.duration);
+
   const emojiY = style.captions.position === "upper" ? 0.62 : 0.31;
   const emojis: Edl["emojis"] = (style.emojis.density === "none" ? [] : direction.emojis)
-    .filter((e) => words[e.word] && !removed.has(e.word))
+    .filter((e) => words[e.word] && !removed.has(e.word) && !underCallout(words[e.word].start))
     .map((e, k) => ({
       at: words[e.word].start,
       duration: 1.4,
@@ -180,6 +256,8 @@ export function buildEdl(opts: {
     emojis,
     sfx: sfxClean,
     hookTitle: hook,
+    callouts,
+    cta: style.motion?.endCard ? (direction.cta ?? null) : null,
   };
 }
 

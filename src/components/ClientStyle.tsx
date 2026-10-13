@@ -20,6 +20,7 @@ export function ClientStyle(props: {
   niche: string | null;
   brandAccent: string | null;
   handle: string | null;
+  brandName?: string | null;
   moods: Mood[];
   activeMoodId: string | null;
   initial: LabState;
@@ -44,6 +45,7 @@ export function ClientStyle(props: {
         direction={props.direction}
         hookTitle={props.hookTitle}
         handle={props.handle}
+        brandName={props.brandName}
         niche={props.niche}
         brandAccent={props.brandAccent}
         moods={props.moods}
