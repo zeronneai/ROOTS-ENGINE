@@ -31,6 +31,7 @@ export default async function AjustesPage({ params }: { params: Promise<{ id: st
           <F l="Instagram"><input name="instagram" defaultValue={client.instagram ?? ""} className="input" /></F>
           <F l="TikTok"><input name="tiktok" defaultValue={client.tiktok ?? ""} className="input" /></F>
           <F l="Sitio web"><input name="website" defaultValue={client.website ?? ""} className="input" /></F>
+          <F l="Link de Google Maps"><input name="google_maps_url" defaultValue={(client as { google_maps_url?: string | null }).google_maps_url ?? ""} className="input" /></F>
           <F l="Plan">
             <select name="plan_tier" defaultValue={client.plan_tier} className="input">
               {Object.entries(PLAN_TIERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}

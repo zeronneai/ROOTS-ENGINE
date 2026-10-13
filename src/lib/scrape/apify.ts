@@ -151,3 +151,69 @@ export function withOutlierScores<T extends { views: number | null }>(posts: T[]
     posts: posts.map((p) => ({ ...p, outlierScore: med > 0 && p.views ? +(p.views / med).toFixed(2) : null })),
   };
 }
+
+// ───────────────────────────── Google Maps ─────────────────────────────
+
+const GMAPS_ACTOR = process.env.APIFY_GMAPS_ACTOR || "compass~crawler-google-places";
+
+export type GooglePlace = {
+  title: string;
+  category: string | null;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  rating: number | null;
+  reviewsCount: number | null;
+  hours: string[];
+  url: string | null;
+  reviews: { stars: number | null; text: string; date: string | null }[];
+};
+
+type GmItem = Record<string, unknown> & {
+  title?: string; categoryName?: string; address?: string; phone?: string; website?: string; totalScore?: number;
+  reviewsCount?: number; url?: string; openingHours?: { day?: string; hours?: string }[];
+  reviews?: { text?: string | null; stars?: number; publishedAtDate?: string }[];
+};
+
+function mapPlace(i: GmItem): GooglePlace {
+  return {
+    title: String(i.title ?? ""),
+    category: i.categoryName ?? null,
+    address: i.address ?? null,
+    phone: i.phone ?? null,
+    website: i.website ?? null,
+    rating: num(i.totalScore),
+    reviewsCount: num(i.reviewsCount),
+    hours: (i.openingHours ?? []).map((h) => `${h.day ?? ""}: ${h.hours ?? ""}`.trim()),
+    url: i.url ?? null,
+    reviews: (i.reviews ?? [])
+      .filter((r) => r.text)
+      .map((r) => ({ stars: num(r.stars), text: String(r.text).slice(0, 400), date: r.publishedAtDate ?? null })),
+  };
+}
+
+/** Perfil de Google del negocio: por link de Google Maps o buscando nombre + ciudad. */
+export async function scrapeGooglePlace(opts: { url?: string | null; query?: string; location?: string | null }, maxReviews = 15) {
+  const input: Record<string, unknown> = { maxReviews, maxImages: 0, language: "es", scrapeReviewsPersonalData: false };
+  if (opts.url) input.startUrls = [{ url: opts.url }];
+  else {
+    input.searchStringsArray = [opts.query];
+    if (opts.location) input.locationQuery = opts.location;
+    input.maxCrawledPlacesPerSearch = 1;
+  }
+  const items = await runActor<GmItem>(GMAPS_ACTOR, input);
+  return items[0] ? mapPlace(items[0]) : null;
+}
+
+/** Los negocios del mismo giro en la ciudad, con calificación y reseñas (mercado local). */
+export async function scrapeGoogleLocalMarket(search: string, location: string, max = 15) {
+  const items = await runActor<GmItem>(GMAPS_ACTOR, {
+    searchStringsArray: [search],
+    locationQuery: location,
+    maxCrawledPlacesPerSearch: max,
+    maxReviews: 0,
+    maxImages: 0,
+    language: "es",
+  });
+  return items.map(mapPlace).map(({ reviews, ...p }) => (void reviews, p));
+}

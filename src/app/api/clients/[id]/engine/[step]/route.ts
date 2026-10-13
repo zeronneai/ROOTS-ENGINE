@@ -6,6 +6,7 @@ import {
   discoverCompetitors,
   generatePlan,
   generateReport,
+  researchGoogle,
   scanCompetitors,
   synthesizeBrandFor,
 } from "@/server/engine";
@@ -28,9 +29,9 @@ export async function POST(_req: Request, ctx: Ctx) {
     let skipped: string | null = null;
     switch (step) {
       case "own": {
-        const r = await scanCompetitors(db, id, 30, "own");
-        if (!r.scanned) skipped = "No tiene Instagram o TikTok propio registrado";
-        result = r;
+        const [r, g] = await Promise.all([scanCompetitors(db, id, 30, "own"), researchGoogle(db, id)]);
+        if (!r.scanned && !g.found) skipped = "No se encontraron redes propias ni perfil de Google";
+        result = { ...r, google: g };
         break;
       }
       case "brand":

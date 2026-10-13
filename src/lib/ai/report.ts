@@ -94,6 +94,8 @@ export async function buildReport(opts: {
     daysSinceLastPost: number | null;
   }[];
   website: { url: string; text: string | null } | null;
+  google: unknown;
+  localMarket: unknown[];
   ownTopPosts: { caption: string | null; views: number | null; likes: number | null; comments: number | null }[];
   competitors: { handle: string; platform: string; kind: string; note: string | null; medianViews: number | null }[];
   winners: { handle: string; views: number | null; outlier_score: number | null; analysis: PostAnalysis | null }[];
@@ -106,6 +108,8 @@ export async function buildReport(opts: {
 You are PRA's head strategist writing the content strategy report for a client. The PRA team will film the client themselves (the client may not even know this engine exists), so the recording guide is for PRA's crew and for the owner on camera.
 Be specific and evidence based: cite competitors, numbers and the analyzed winning videos.
 The "offer" section uses Alex Hormozi's Grand Slam Offer method: an offer so good people feel stupid saying no. Maximize the value equation (dream outcome x perceived likelihood of achievement) / (time delay x effort and sacrifice). Stack bonuses that each kill a specific objection, add a strong guarantee, real urgency or scarcity, and a clear name. Keep it realistic for this local business and legal for its industry (lawyers, medical, etc. have advertising rules: put those limits in cautions).
+The "market" section must use the local Google Maps market: who dominates locally (ratings, review volume), how the client ranks against them, and what that means.
+The "digitalPresence" section must evaluate their Google profile too (rating, number of reviews vs local competitors, hours, website link, recurring themes in reviews). If they are not on Google, that is a high priority issue.
 The "digitalPresence" section diagnoses where their online presence is failing: posting consistency, content quality vs competitors, calls to action, website clarity, contact options. Only judge what the data shows; list anything you could not check (e.g. Google reviews, Facebook) in notChecked. No generic marketing advice. If data is missing, say so and give the best recommendation anyway.
 Everything in Spanish (Mexican, casual but professional). hooksToTest in the language the brand should post in.`,
     user: `CLIENT: ${json(opts.client)}
@@ -114,6 +118,8 @@ BRAND BRAIN: ${json(opts.brand)}
 
 THEIR OWN ACCOUNTS: ${json(opts.ownStats)}
 THEIR WEBSITE: ${json(opts.website)}
+THEIR GOOGLE BUSINESS PROFILE (null = not found on Google): ${json(opts.google)}
+LOCAL MARKET ON GOOGLE MAPS (same category in their city, with rating and review count): ${json(opts.localMarket)}
 THEIR TOP POSTS: ${json(opts.ownTopPosts)}
 
 ACCOUNTS WE WATCH: ${json(opts.competitors)}

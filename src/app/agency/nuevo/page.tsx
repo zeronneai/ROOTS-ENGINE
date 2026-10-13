@@ -37,6 +37,7 @@ export default async function NewClient() {
             <Field label="Instagram del cliente"><input name="instagram" placeholder="@usuario" className="input" /></Field>
             <Field label="TikTok del cliente"><input name="tiktok" placeholder="@usuario" className="input" /></Field>
             <Field label="Sitio web"><input name="website" className="input" /></Field>
+            <Field label="Link de Google Maps (opcional)"><input name="google_maps_url" className="input" placeholder="Si no lo pones, lo busca por nombre y ciudad" /></Field>
             <Field label="Plan">
               <select name="plan_tier" className="input" defaultValue="plan">
                 {Object.entries(PLAN_TIERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}

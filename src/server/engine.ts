@@ -15,11 +15,15 @@ import {
   scrapeInstagramHashtags,
   scrapeTiktok,
   scrapeTiktokHashtags,
+  scrapeGooglePlace,
+  scrapeGoogleLocalMarket,
+  type GooglePlace,
   withOutlierScores,
   type ScrapedPost,
 } from "@/lib/scrape/apify";
 import { discoveryQueries, pickCompetitors, type Candidate } from "@/lib/ai/discover";
 import { buildReport } from "@/lib/ai/report";
+import { NICHES } from "@/lib/styles/presets";
 
 type DB = SupabaseClient;
 
@@ -471,12 +475,15 @@ export async function generateReport(db: DB, clientId: string) {
     }),
   );
   const website = ctx.client.website ? { url: ctx.client.website, text: await fetchWebsiteText(ctx.client.website) } : null;
+  const g = ctx.client as typeof ctx.client & { google_profile?: GooglePlace | null; local_market?: Omit<GooglePlace, "reviews">[] | null };
 
   const data = await buildReport({
     client: { name: ctx.client.name, niche: ctx.client.niche, city: ctx.client.city, plan_tier: ctx.client.plan_tier },
     brand: ctx.brand.data,
     ownStats,
     website,
+    google: g.google_profile ?? null,
+    localMarket: g.local_market ?? [],
     ownTopPosts: (ownPosts ?? []).map((p) => ({ caption: p.caption?.slice(0, 300) ?? null, views: p.views, likes: p.likes, comments: p.comments })),
     competitors: (comps ?? [])
       .filter((c) => !c.is_own_account)
@@ -491,4 +498,50 @@ export async function generateReport(db: DB, clientId: string) {
   const { data: row, error } = await db.from("reports").insert({ client_id: clientId, data }).select("id").single();
   if (error) throw error;
   return row.id as string;
+}
+
+// ───────────────────────────── Google ─────────────────────────────
+
+/**
+ * Perfil de Google del cliente (dirección, horario, teléfono, calificación, reseñas) y el mercado local
+ * (negocios del mismo giro en su ciudad). Lo básico ya no hay que preguntarlo.
+ */
+export async function researchGoogle(db: DB, clientId: string) {
+  const ctx = await getClientContext(db, clientId);
+  const c = ctx.client as typeof ctx.client & { google_maps_url?: string | null };
+  const nicheLabel = NICHES.find((n) => n.id === c.niche)?.label.split("/")[0].trim() ?? c.niche ?? "";
+  const location = c.city ?? "El Paso, TX";
+
+  const [place, market] = await Promise.all([
+    scrapeGooglePlace({ url: c.google_maps_url, query: c.name, location }).catch((e) => (console.error(e), null)),
+    nicheLabel
+      ? scrapeGoogleLocalMarket(nicheLabel, location, 15).catch((e) => (console.error(e), [] as Omit<GooglePlace, "reviews">[]))
+      : Promise.resolve([] as Omit<GooglePlace, "reviews">[]),
+  ]);
+
+  const localMarket = market.filter((m) => !place || m.title !== place.title);
+  await db.from("clients").update({ google_profile: place, local_market: localMarket }).eq("id", clientId);
+
+  if (place) {
+    const lines = [
+      `Nombre en Google: ${place.title}`,
+      place.category ? `Categoría: ${place.category}` : "",
+      place.address ? `Dirección: ${place.address}` : "",
+      place.phone ? `Teléfono: ${place.phone}` : "",
+      place.website ? `Sitio: ${place.website}` : "",
+      place.hours.length ? `Horario: ${place.hours.join("; ")}` : "",
+      place.rating != null ? `Calificación: ${place.rating} con ${place.reviewsCount ?? 0} reseñas` : "",
+      place.reviews.length ? `Reseñas recientes:\n${place.reviews.map((r) => `- (${r.stars ?? "?"}★) ${r.text}`).join("\n")}` : "",
+    ].filter(Boolean);
+    await db.from("brand_inputs").delete().eq("client_id", clientId).eq("title", "Perfil de Google");
+    await db.from("brand_inputs").insert({
+      client_id: clientId,
+      kind: "link",
+      title: "Perfil de Google",
+      content: lines.join("\n"),
+      url: place.url,
+      added_by_role: "agency",
+    });
+  }
+  return { found: !!place, localMarket: localMarket.length };
 }

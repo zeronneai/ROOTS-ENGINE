@@ -1,6 +1,6 @@
 /** Pasos del botón "Arrancar motor" (cada uno es una llamada corta para no pasar el límite de Vercel). */
 export const ENGINE_STEPS = [
-  { id: "own", label: "Revisar su cuenta y sitio web", busy: "Revisando su cuenta..." },
+  { id: "own", label: "Revisar sus redes, Google y el mercado local", busy: "Revisando redes y Google..." },
   { id: "brand", label: "Armar el Brand Brain", busy: "Entendiendo la marca..." },
   { id: "discover", label: "Buscar competencia y referencias", busy: "Investigando el mercado..." },
   { id: "scan", label: "Escanear sus videos", busy: "Bajando videos..." },

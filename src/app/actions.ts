@@ -48,6 +48,7 @@ export async function createClientAction(form: FormData) {
       instagram: str(form, "instagram")?.replace(/^@/, ""),
       tiktok: str(form, "tiktok")?.replace(/^@/, ""),
       website: str(form, "website"),
+      google_maps_url: str(form, "google_maps_url"),
       plan_tier: str(form, "plan_tier") ?? "plan",
       status: "onboarding",
     })
@@ -89,6 +90,7 @@ export async function updateClientAction(clientId: string, form: FormData) {
       instagram: str(form, "instagram")?.replace(/^@/, ""),
       tiktok: str(form, "tiktok")?.replace(/^@/, ""),
       website: str(form, "website"),
+      google_maps_url: str(form, "google_maps_url"),
     })
     .eq("id", clientId);
   revalidatePath(`/c/${clientId}`, "layout");

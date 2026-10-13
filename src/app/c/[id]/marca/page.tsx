@@ -14,6 +14,9 @@ export default async function MarcaPage({ params }: { params: Promise<{ id: stri
   return (
     <>
       <PageTitle kicker="01 · Brand Brain" title="Así entiende el motor a la marca">
+        {isAgency ? (
+          <ApiButton url={`/api/clients/${id}/engine/own`} label="Traer datos de Google y redes" busyLabel="Buscando (1-2 min)..." variant="ghost" />
+        ) : null}
         <ApiButton
           url={`/api/clients/${id}/synthesize`}
           label={pending ? `Actualizar con ${pending} cosa${pending > 1 ? "s" : ""} nueva${pending > 1 ? "s" : ""}` : "Re-sintetizar"}
