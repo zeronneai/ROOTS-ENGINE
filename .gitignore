@@ -44,3 +44,6 @@ next-env.d.ts
 
 # clips de prueba locales
 /public/demo/face.mp4
+
+# whisper local (modelo y binarios)
+/.whisper/

@@ -76,14 +76,18 @@ npm run dev        # http://localhost:3000
 ```
 Deploy: conectar el repo en Vercel. Las rutas de escaneo y plan usan hasta 5 min (`maxDuration = 300`).
 
-### 4. Worker de edición
-Corre en cualquier compu con Node 20+ y ffmpeg (Windows: `winget install ffmpeg`).
+### 4. Worker de edición (en tu compu)
+Necesita Node 20+, Git y ffmpeg (Windows: `winget install OpenJS.NodeJS.LTS Git.Git Gyan.FFmpeg`).
 ```bash
+git clone https://github.com/zeronneai/ROOTS-ENGINE.git
+cd ROOTS-ENGINE
 npm install
-npm run worker
+# crea .env.local con NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
+npm run check     # revisa que todo esté listo
+npm run worker    # déjalo corriendo
 ```
-Toma los videos en fila, los transcribe, Claude los dirige y quedan "Listos para revisar". Al aprobar en el portal,
-el worker los exporta a MP4. Con `AUTO_RENDER=true` se exportan directo.
+La transcripción es local y gratis (Whisper). La primera vez descarga el modelo (~470 MB con `small`).
+Si la compu está apagada, los videos esperan en fila y se procesan al prenderla.
 
 ### 5. Probar estilos sin nada conectado
 ```bash

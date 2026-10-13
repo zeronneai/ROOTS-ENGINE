@@ -13,7 +13,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { supabaseAdmin } from "../src/lib/supabase/admin";
-import { attachPunctuation, transcribeWords } from "../src/lib/transcribe";
+import { transcribeWords } from "../src/lib/transcribe";
 import { directEdit } from "../src/lib/ai/direct-edit";
 import { buildEdl } from "../src/lib/edl/build";
 import { getClientContext, styleForClient } from "../src/server/engine";
@@ -89,11 +89,10 @@ async function stepTranscribe() {
     console.log(`→ transcribiendo ${edit.id}`);
     const file = await download(edit.recordings.storage_path, dir);
     const meta = probe(file);
-    const audio = path.join(dir, "audio.mp3");
-    execFileSync("ffmpeg", ["-v", "error", "-y", "-i", file, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k", audio]);
     const { data: client } = await db.from("clients").select("language").eq("id", edit.client_id).single();
-    const t = await transcribeWords(audio, client?.language);
-    const transcript: StoredTranscript = { text: t.text, words: attachPunctuation(t.text, t.words), ...meta };
+    const t = await transcribeWords(file, client?.language);
+    if (!t.words.length) throw new Error("No se detectó voz en el video");
+    const transcript: StoredTranscript = { text: t.text, words: t.words, ...meta };
     await db.from("edits").update({ transcript, status: "directing" }).eq("id", edit.id);
   } catch (e) {
     await fail(edit.id, e);
@@ -183,8 +182,18 @@ async function sweepStale() {
   }
 }
 
+function checkFfmpeg() {
+  try {
+    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  } catch {
+    console.error("✗ No encuentro ffmpeg. En Windows: winget install Gyan.FFmpeg  (y cierra y abre la terminal)");
+    process.exit(1);
+  }
+}
+
 async function loop() {
-  console.log(`ROOTS ENGINE worker arriba (auto-render: ${AUTO_RENDER})`);
+  checkFfmpeg();
+  console.log(`ROOTS ENGINE worker arriba · transcripción: ${process.env.TRANSCRIBE_PROVIDER || "local"} · auto-render: ${AUTO_RENDER}`);
   await sweepStale();
   setInterval(sweepStale, 10 * 60 * 1000);
   for (;;) {
