@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Josefin Sans";
+  src: url("/fonts/josefin-sans-latin-300.woff2") format("woff2");
+  font-weight: 300;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Josefin Sans";
+  src: url("/fonts/josefin-sans-latin-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-latin-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-latin-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-latin-800.woff2") format("woff2");
+  font-weight: 800;
+  font-display: swap;
+}
+
+/* Purple Roots: negro profundo, morado, lavanda */
+@theme {
+  --color-ink: #07050b;
+  --color-panel: #110c19;
+  --color-panel-2: #181024;
+  --color-line: #2a1d3d;
+  --color-purple: #8b5cf6;
+  --color-purple-deep: #5b21b6;
+  --color-lavender: #c4b5fd;
+  --color-muted: #9a8fb0;
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-bad: #f87171;
+  --font-display: "Josefin Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: #efeaf7;
+  font-family: var(--font-sans);
+}
+
+body {
+  background-image:
+    radial-gradient(1200px 600px at 85% -10%, rgba(139, 92, 246, 0.16), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(91, 33, 182, 0.14), transparent 60%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+.display {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+}
+
+.card {
+  background: linear-gradient(180deg, rgba(24, 16, 36, 0.92), rgba(17, 12, 25, 0.92));
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+}
+
+.glow {
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35), 0 10px 40px -10px rgba(139, 92, 246, 0.45);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.6rem 1.15rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: white;
+  box-shadow: 0 8px 30px -8px rgba(139, 92, 246, 0.7);
+}
+.btn-primary:hover {
+  filter: brightness(1.12);
+}
+.btn-ghost {
+  border: 1px solid var(--color-line);
+  color: #e9e2f7;
+}
+.btn-ghost:hover {
+  border-color: var(--color-purple);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input {
+  width: 100%;
+  background: #0c0812;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  color: #efeaf7;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--color-purple);
+}
+
+.label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  font-size: 0.72rem;
+  border: 1px solid var(--color-line);
+  color: #d9cff0;
+  background: rgba(139, 92, 246, 0.08);
+}
