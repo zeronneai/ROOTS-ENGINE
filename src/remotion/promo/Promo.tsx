@@ -332,7 +332,7 @@ const Whoosh: React.FC<{ at: number; volume?: number }> = ({ at, volume = 0.18 }
 // ───────────────────────────── escenas ─────────────────────────────
 
 const S1Hook: React.FC = () => (
-  <Scene dur={96} dark>
+  <Scene dur={84} dark>
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", gap: 10 }}>
       <Words text="Deja de adivinar" at={6} size={150} color={C.white} />
       <div style={{ color: C.ink }}>
@@ -354,7 +354,7 @@ const S2Logo: React.FC = () => {
   const p = ease(f, 4, 40);
   const spin = interpolate(p, [0, 1], [-100, 0]);
   return (
-    <Scene dur={88} dark>
+    <Scene dur={76} dark>
       <Orb x={1500} y={260} r={90} color={C.purple} delay={10} />
       <Orb x={380} y={820} r={60} color={C.peach} delay={18} />
       <Orb x={1660} y={860} r={34} color={C.sun} delay={26} />
@@ -379,8 +379,8 @@ const S2Logo: React.FC = () => {
         <div style={{ opacity: ease(f, 22, 24), filter: `blur(${(1 - ease(f, 22, 24)) * 10}px)` }}>
           <Img src={staticFile("brand/pr-wordmark.png")} style={{ height: 46, width: "auto" }} />
         </div>
-        <Kicker text="Roots Engine" at={34} color={C.sun} />
-        <Words text="Tu motor de contenido con IA." at={44} size={58} color="rgba(255,255,255,0.82)" weight={600} stagger={3} tracking={-0.02} />
+        <Kicker text="Roots Engine" at={26} color={C.sun} />
+        <Words text="Tu motor de contenido con IA." at={32} size={58} color="rgba(255,255,255,0.82)" weight={600} stagger={3} tracking={-0.02} />
       </AbsoluteFill>
     </Scene>
   );
@@ -410,7 +410,7 @@ const S3Signup: React.FC = () => {
   const press = ease(f, 76, 5) - ease(f, 81, 7);
   const done = ease(f, 83, 12);
   return (
-    <Scene dur={112}>
+    <Scene dur={104}>
       <Orb x={1720} y={170} r={70} color={C.sun} delay={6} />
       <Ring x={1630} y={900} size={170} color={C.purple} delay={14} />
       <AbsoluteFill style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 150 }}>
@@ -490,7 +490,7 @@ const Count: React.FC<{ to: number; at: number; dur?: number; decimals?: number;
 };
 
 const S4Market: React.FC = () => (
-  <Scene dur={112}>
+  <Scene dur={104}>
     <Orb x={210} y={190} r={46} color={C.peach} delay={20} />
     <AbsoluteFill style={{ alignItems: "center", paddingTop: 92, gap: 18 }}>
       <Kicker text="Investigación automática" at={2} />
@@ -516,7 +516,7 @@ const S4Market: React.FC = () => (
       <Card style={{ width: 480, textAlign: "center", padding: 36 }}>
         <Label>Video que más pegó</Label>
         <div style={{ fontSize: 120, fontWeight: 800, letterSpacing: "-0.05em", color: C.purple, lineHeight: 1.05, marginTop: 10 }}>
-          <Count to={12.4} at={48} decimals={1} suffix="x" />
+          <Count to={12.4} at={44} decimals={1} suffix="x" />
         </div>
         <div style={{ fontSize: 20, color: C.muted }}>sobre su promedio</div>
         <div style={{ marginTop: 18, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
@@ -530,15 +530,15 @@ const S4Market: React.FC = () => (
         <Label>Google Maps</Label>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 16 }}>
           <span style={{ fontSize: 76, fontWeight: 800, letterSpacing: "-0.04em" }}>
-            <Count to={4.8} at={60} decimals={1} />
+            <Count to={4.8} at={52} decimals={1} />
           </span>
           <span style={{ fontSize: 34, color: "#f5b301" }}>★★★★★</span>
         </div>
         <div style={{ fontSize: 20, color: C.muted, marginTop: 4 }}>
-          <Count to={214} at={60} /> reseñas · 3er lugar en tu zona
+          <Count to={214} at={52} /> reseñas · 3er lugar en tu zona
         </div>
         <div style={{ marginTop: 18, height: 10, borderRadius: 99, background: "#f0eef5", overflow: "hidden" }}>
-          <ProgressFill at={66} to={0.72} />
+          <ProgressFill at={54} to={0.72} />
         </div>
       </Card>
     </Fly>
@@ -596,7 +596,7 @@ const ScoreRing: React.FC<{ at: number; value: number; size: number }> = ({ at, 
 const S5Report: React.FC = () => {
   const f = useCurrentFrame();
   const p = ease(f, 10, 44);
-  const scroll = ease(f, 52, 44, 0, -150, IN_OUT);
+  const scroll = ease(f, 48, 36, 0, -150, IN_OUT);
   const sections: [string, string][] = [
     ["Oferta irresistible", "Paquete Glow 90: 3 sesiones + seguimiento. Si no ves cambio, la cuarta va por nuestra cuenta."],
     ["Dónde falla tu presencia digital", "Publicas 2 veces al mes y tus videos no tienen llamado a la acción."],
@@ -604,7 +604,7 @@ const S5Report: React.FC = () => {
     ["Cómo grabar", "Luz de ventana, celular a la altura de los ojos, primeros 2 segundos con el resultado."],
   ];
   return (
-    <Scene dur={112}>
+    <Scene dur={100}>
       <Orb x={1770} y={300} r={56} color={C.purple} delay={12} />
       <Orb x={140} y={900} r={80} color={C.sun} delay={20} />
       <AbsoluteFill style={{ flexDirection: "row", alignItems: "center", padding: "0 130px", gap: 90 }}>
@@ -664,7 +664,7 @@ const S6Plan: React.FC = () => {
   ];
   const f = useCurrentFrame();
   return (
-    <Scene dur={108}>
+    <Scene dur={96}>
       <Ring x={1760} y={170} size={130} color={C.peach} delay={10} />
       <AbsoluteFill style={{ alignItems: "center", paddingTop: 96, gap: 18 }}>
         <Kicker text="Plan semanal" at={2} />
@@ -770,7 +770,7 @@ const S7Edit: React.FC = () => {
     { kind: "counsel", label: "Abogados", rot: -22 },
   ];
   return (
-    <Scene dur={112}>
+    <Scene dur={104}>
       <Orb x={200} y={260} r={64} color={C.purple} delay={8} />
       <Orb x={1720} y={820} r={70} color={C.sun} delay={16} />
       <AbsoluteFill style={{ alignItems: "center", paddingTop: 70, gap: 14 }}>
@@ -797,15 +797,169 @@ const S7Edit: React.FC = () => {
   );
 };
 
+/** Flyer de ejemplo (diseño de muestra hecho en CSS). */
+const MockFlyer: React.FC<{ kind: "karaoke" | "tacos" | "glow"; w: number }> = ({ kind, w }) => {
+  const h = w * 1.25;
+  const k = w / 420;
+  const look = {
+    karaoke: {
+      bg: "radial-gradient(circle at 50% 30%, #ff3cac 0%, #6a2bd1 45%, #140726 100%)",
+      title: ["NOCHE DE", "KARAOKE"],
+      sub: "VIERNES · 9 PM",
+      pill: "2x1 EN CERVEZAS",
+      pillBg: C.sun,
+      font: `"Anton", sans-serif`,
+      emoji: "🎤",
+    },
+    tacos: {
+      bg: "radial-gradient(circle at 50% 35%, #ffb17a 0%, #e8590c 50%, #3a1204 100%)",
+      title: ["MARTES", "DE TACOS"],
+      sub: "TODO EL DÍA",
+      pill: "3 TACOS + AGUA",
+      pillBg: "#fff3d6",
+      font: `"Anton", sans-serif`,
+      emoji: "🌮",
+    },
+    glow: {
+      bg: "radial-gradient(circle at 50% 30%, #fff5f7 0%, #f6d9d2 45%, #b98a86 100%)",
+      title: ["Glow", "Week"],
+      sub: "SOLO ESTA SEMANA",
+      pill: "Facial + regalo",
+      pillBg: "#ffffff",
+      font: `"Playfair Display", serif`,
+      emoji: "✨",
+    },
+  }[kind];
+  const dark = kind !== "glow";
+  return (
+    <div style={{ width: w, height: h, borderRadius: 22 * k, overflow: "hidden", background: look.bg, position: "relative", boxShadow: "0 50px 100px -30px rgba(33,28,53,0.55)" }}>
+      <div style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", width: 200 * k, height: 200 * k, borderRadius: "50%", background: dark ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.5)", display: "grid", placeItems: "center", fontSize: 110 * k }}>
+        {look.emoji}
+      </div>
+      <div style={{ position: "absolute", top: 34 * k, left: 0, right: 0, textAlign: "center", fontFamily: look.font, fontWeight: 900, fontSize: 64 * k, lineHeight: 0.95, color: dark ? "#fff" : "#5B2333", textShadow: dark ? "0 6px 24px rgba(0,0,0,0.4)" : "none" }}>
+        {look.title[0]}
+        <br />
+        {look.title[1]}
+      </div>
+      <div style={{ position: "absolute", bottom: 92 * k, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 * k }}>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 600, letterSpacing: "0.22em", fontSize: 20 * k, color: dark ? "#fff" : "#5B2333" }}>{look.sub}</div>
+        <div style={{ background: look.pillBg, color: C.ink, borderRadius: 99, padding: `${8 * k}px ${20 * k}px`, fontFamily: SANS, fontWeight: 800, fontSize: 22 * k }}>{look.pill}</div>
+      </div>
+      <div style={{ position: "absolute", bottom: 22 * k, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
+        <div style={{ background: "#fff", borderRadius: 12 * k, padding: `${6 * k}px ${12 * k}px`, display: "flex", alignItems: "center" }}>
+          <Img src={staticFile("brand/pr-icon-purple.png")} style={{ height: 30 * k, width: "auto" }} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** Miniatura de entrada (estilo, logo, foto de la noche). */
+const InputTile: React.FC<{ at: number; label: string; pin?: boolean; children: React.ReactNode }> = ({ at, label, pin, children }) => {
+  const f = useCurrentFrame();
+  const p = ease(f, at, 24);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, opacity: p, transform: `translateY(${(1 - p) * 40}px) scale(${0.8 + 0.2 * p})` }}>
+      <div style={{ position: "relative", width: 132, height: 132, borderRadius: 24, overflow: "hidden", background: C.cream, border: `1px solid ${C.line}`, boxShadow: "0 20px 40px -20px rgba(33,28,53,0.4)" }}>
+        {children}
+        {pin ? <span style={{ position: "absolute", right: 8, top: 8, width: 30, height: 30, borderRadius: 99, background: C.purple, color: "#fff", display: "grid", placeItems: "center", fontSize: 15 }}>📌</span> : null}
+      </div>
+      <span style={{ fontFamily: SANS, fontWeight: 600, fontSize: 18, color: C.muted }}>{label}</span>
+    </div>
+  );
+};
+
+const S7Flyers: React.FC = () => {
+  const f = useCurrentFrame();
+  const flow = ease(f, 30, 20, 0, 1, IN_OUT);
+  const fan = ease(f, 44, 36);
+  const cards: { kind: "karaoke" | "tacos" | "glow"; rot: number; x: number; z: number; delay: number }[] = [
+    { kind: "glow", rot: -16, x: -300, z: -160, delay: 10 },
+    { kind: "tacos", rot: 16, x: 300, z: -160, delay: 6 },
+    { kind: "karaoke", rot: 0, x: 0, z: 40, delay: 0 },
+  ];
+  return (
+    <Scene dur={104}>
+      <Orb x={1780} y={180} r={60} color={C.peach} delay={8} />
+      <Orb x={140} y={940} r={70} color={C.purple} delay={14} />
+      <AbsoluteFill style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 70 }}>
+        <div style={{ width: 640, display: "flex", flexDirection: "column", gap: 24 }}>
+          <Kicker text="Flyers con IA" at={2} />
+          <Words text="Tus flyers, con tu marca." at={8} size={84} align="left" stagger={3} />
+          <div style={{ opacity: ease(f, 24, 18), fontFamily: SANS, fontSize: 28, color: C.muted, lineHeight: 1.35 }}>
+            Sube tu estilo, tu logo y las fotos de la noche. La IA lo diseña en segundos.
+          </div>
+          <div style={{ display: "flex", gap: 22, marginTop: 10 }}>
+            <InputTile at={14} label="Tu estilo">
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #ff3cac, #6a2bd1 60%, #140726)" }} />
+              <div style={{ position: "absolute", left: 16, top: 18, right: 16, fontFamily: `"Anton", sans-serif`, color: "#fff", fontSize: 30, lineHeight: 0.95 }}>BIG<br />TYPE</div>
+            </InputTile>
+            <InputTile at={20} label="Tu logo" pin>
+              <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "#fff" }}>
+                <Img src={staticFile("brand/pr-icon-purple.png")} style={{ height: 70, width: "auto" }} />
+              </div>
+            </InputTile>
+            <InputTile at={26} label="Esta noche">
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(160deg, #3b4256, #111)" }} />
+              <div style={{ position: "absolute", left: 44, top: 22, width: 44, height: 52, borderRadius: "50%", background: "rgba(255,255,255,0.35)" }} />
+              <div style={{ position: "absolute", left: 26, top: 78, width: 80, height: 70, borderRadius: "40px 40px 0 0", background: "rgba(255,255,255,0.35)" }} />
+              <div style={{ position: "absolute", right: 14, bottom: 12, fontSize: 30 }}>🎤</div>
+            </InputTile>
+          </div>
+          <div style={{ height: 6, width: 440, borderRadius: 99, background: "#f0eef5", overflow: "hidden", marginTop: 6 }}>
+            <div style={{ height: "100%", width: `${flow * 100}%`, background: `linear-gradient(90deg, ${C.purple}, ${C.peach}, ${C.sun})` }} />
+          </div>
+        </div>
+        <div style={{ position: "relative", width: 900, height: 760, perspective: 2400 }}>
+          {cards.map((c) => {
+            const p = ease(f, 44 + c.delay, 34);
+            return (
+              <div
+                key={c.kind}
+                style={{
+                  position: "absolute",
+                  left: 450 - 190,
+                  top: 140,
+                  opacity: p,
+                  transform: `translateX(${c.x * fan}px) translateZ(${c.z}px) rotateY(${c.rot * fan - (1 - p) * 30}deg) rotateZ(${(c.rot / 3) * fan}deg) translateY(${(1 - p) * 120 + Math.sin((f + c.delay * 4) / 26) * 6}px)`,
+                  filter: `blur(${(1 - p) * 10}px)`,
+                }}
+              >
+                <MockFlyer kind={c.kind} w={380} />
+              </div>
+            );
+          })}
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: "flex",
+              justifyContent: "center",
+              gap: 12,
+              opacity: ease(f, 70, 16),
+              transform: `translateY(${(1 - ease(f, 70, 16)) * 20}px)`,
+            }}
+          >
+            <Chip>Post, historia o cuadrado</Chip>
+            <Chip bg="rgba(255,177,122,0.4)">Ajusta con una frase</Chip>
+          </div>
+        </div>
+      </AbsoluteFill>
+    </Scene>
+  );
+};
+
 const S8Plans: React.FC = () => {
   const f = useCurrentFrame();
   const plans: [string, string, string][] = [
-    ["Roots Plan", "Investigación, reporte y plan semanal con hooks y guiones.", C.cream],
+    ["Roots Plan", "Investigación, reporte, plan semanal y flyers con IA.", C.cream],
     ["Roots Auto", "Todo lo anterior y el motor edita tus videos solo.", "#fff"],
     ["Roots Edit", "Todo lo anterior y nuestro equipo los edita a mano.", "#fff"],
     ["Full PRA", "Producción completa: grabamos, editamos y publicamos.", C.ink],
   ];
-  const outro = ease(f, 98, 20, 0, 1, IN_OUT);
+  const outro = ease(f, 86, 18, 0, 1, IN_OUT);
   return (
     <Scene dur={260}>
       <AbsoluteFill style={{ opacity: 1 - outro, transform: `scale(${1 - outro * 0.04})` }}>
@@ -847,7 +1001,7 @@ const S8Plans: React.FC = () => {
           })}
         </AbsoluteFill>
       </AbsoluteFill>
-      <Outro at={104} />
+      <Outro at={92} />
     </Scene>
   );
 };
@@ -890,14 +1044,15 @@ const Outro: React.FC<{ at: number }> = ({ at }) => {
 // ───────────────────────────── línea de tiempo ─────────────────────────────
 
 const TIMELINE: { from: number; dur: number; C: React.FC }[] = [
-  { from: 0, dur: 96, C: S1Hook },
-  { from: 88, dur: 88, C: S2Logo },
-  { from: 168, dur: 112, C: S3Signup },
-  { from: 272, dur: 112, C: S4Market },
-  { from: 376, dur: 112, C: S5Report },
-  { from: 480, dur: 108, C: S6Plan },
-  { from: 580, dur: 112, C: S7Edit },
-  { from: 684, dur: 216, C: S8Plans },
+  { from: 0, dur: 84, C: S1Hook },
+  { from: 76, dur: 76, C: S2Logo },
+  { from: 144, dur: 104, C: S3Signup },
+  { from: 240, dur: 104, C: S4Market },
+  { from: 336, dur: 100, C: S5Report },
+  { from: 428, dur: 96, C: S6Plan },
+  { from: 516, dur: 104, C: S7Edit },
+  { from: 612, dur: 104, C: S7Flyers },
+  { from: 708, dur: 192, C: S8Plans },
 ];
 
 export const Promo: React.FC = () => {
