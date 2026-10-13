@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { setPreviewAction } from "@/app/actions";
 
 const I = {
   home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
@@ -20,7 +21,7 @@ function Icon({ d }: { d: string }) {
 }
 
 /** Barra fija abajo en el celular con lo más usado; "Más" abre el resto. */
-export function MobileNav({ clientId, isAgency }: { clientId: string; isAgency: boolean }) {
+export function MobileNav({ clientId, isAgency, badge = 0, previewing = false }: { clientId: string; isAgency: boolean; badge?: number; previewing?: boolean }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const base = `/c/${clientId}`;
@@ -48,6 +49,11 @@ export function MobileNav({ clientId, isAgency }: { clientId: string; isAgency: 
             style={{ bottom: "calc(76px + env(safe-area-inset-bottom))" }}
             onClick={(e) => e.stopPropagation()}
           >
+            {isAgency || previewing ? (
+              <form action={setPreviewAction.bind(null, clientId, !previewing)}>
+                <button className="block w-full rounded-xl px-4 py-3 text-left text-[15px]">{previewing ? "Salir de vista cliente" : "👁 Ver como cliente"}</button>
+              </form>
+            ) : null}
             {more.map((m) => (
               <Link
                 key={m.href}
@@ -71,7 +77,10 @@ export function MobileNav({ clientId, isAgency }: { clientId: string; isAgency: 
             const a = isActive(m.href);
             return (
               <Link key={m.href} href={m.href} onClick={() => setOpen(false)} className={`flex flex-col items-center gap-0.5 py-2.5 text-[11px] ${a ? "text-purple" : "text-muted"}`}>
-                <span className={`grid h-8 w-12 place-items-center rounded-full ${a ? "bg-sun/70" : ""}`}><Icon d={m.icon} /></span>
+                <span className={`relative grid h-8 w-12 place-items-center rounded-full ${a ? "bg-sun/70" : ""}`}>
+                  <Icon d={m.icon} />
+                  {m.href === base && badge > 0 ? <span className="absolute -top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-peach px-1 text-[10px] font-bold text-ink">{badge}</span> : null}
+                </span>
                 {m.label}
               </Link>
             );

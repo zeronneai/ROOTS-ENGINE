@@ -8,7 +8,7 @@ import { Spinner } from "./ApiButton";
 type State = "pending" | "running" | "done" | "skipped" | "error";
 
 /** "Arrancar motor": corre todos los pasos en cadena con una lista que se va palomeando. */
-export function EngineRunner({ clientId, hasReport }: { clientId: string; hasReport: boolean }) {
+export function EngineRunner({ clientId, hasReport, forClient = false }: { clientId: string; hasReport: boolean; forClient?: boolean }) {
   const router = useRouter();
   const [states, setStates] = useState<Record<string, State>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -48,15 +48,19 @@ export function EngineRunner({ clientId, hasReport }: { clientId: string; hasRep
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="display text-xs text-lavender">Content Engine</div>
-          <div className="mt-1 text-lg font-semibold">Arrancar motor</div>
-          <p className="text-sm text-muted">Investiga, analiza y arma reporte y plan en un solo paso. Tarda de 5 a 10 minutos; no cierres esta pestaña.</p>
+          <div className="mt-1 text-lg font-semibold">{forClient ? "Arrancar mi análisis" : "Arrancar motor"}</div>
+          <p className="text-sm text-muted">
+            {forClient
+              ? "Revisamos tus redes, tu Google, tu competencia y lo que está pegando en tu giro, y te armamos reporte y plan de videos. Tarda de 5 a 10 minutos; no cierres esta pestaña."
+              : "Investiga, analiza y arma reporte y plan en un solo paso. Tarda de 5 a 10 minutos; no cierres esta pestaña."}
+          </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           {failed && !running ? (
             <button className="btn btn-ghost" onClick={() => run(failed.id)}>Reintentar desde aquí</button>
           ) : null}
           <button className="btn btn-primary" disabled={running} onClick={() => run()}>
-            {running ? <Spinner /> : "✦"} {running ? "Trabajando..." : hasReport ? "Volver a correr" : "Arrancar motor"}
+            {running ? <Spinner /> : "✦"} {running ? "Trabajando..." : hasReport ? "Volver a correr" : forClient ? "Arrancar mi análisis" : "Arrancar motor"}
           </button>
         </div>
       </div>

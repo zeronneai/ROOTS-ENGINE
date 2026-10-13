@@ -44,5 +44,7 @@ export async function submitIntakeAction(token: string, form: FormData) {
     content: lines.join("\n"),
     added_by_role: "client",
   });
+  const back = form.get("back");
+  if (typeof back === "string" && /^\/c\/[0-9a-f-]{36}$/i.test(back)) redirect(`${back}?gracias=1`);
   redirect(`/intake/${token}?ok=1`);
 }

@@ -20,9 +20,18 @@ type Ctx = { params: Promise<{ id: string; step: string }> };
 export async function POST(_req: Request, ctx: Ctx) {
   const { id, step } = await ctx.params;
   const viewer = await canAccess(id);
-  if (!viewer || viewer.role !== "agency") return NextResponse.json({ error: "Solo la agencia" }, { status: 403 });
+  if (!viewer) return NextResponse.json({ error: "Sin acceso" }, { status: 403 });
   if (!ENGINE_STEPS.some((s) => s.id === step)) return NextResponse.json({ error: "Paso desconocido" }, { status: 400 });
   const db = supabaseAdmin();
+  if (viewer.role !== "agency") {
+    // el cliente puede correr su análisis una vez por semana
+    const { data: last } = await db.from("reports").select("created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const age = last ? Date.now() - new Date(last.created_at).getTime() : Infinity;
+    const fresh = age < 7 * 864e5;
+    // el plan va justo después del reporte en la cadena: se permite si el reporte es de hace minutos
+    const finishingRun = step === "plan" && age < 15 * 60 * 1000;
+    if (fresh && !finishingRun) return NextResponse.json({ error: "Tu análisis se puede actualizar una vez por semana" }, { status: 429 });
+  }
 
   try {
     let result: unknown = null;

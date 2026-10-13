@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function ClientNav({ clientId, isAgency }: { clientId: string; isAgency: boolean }) {
+export function ClientNav({ clientId, isAgency, badge = 0 }: { clientId: string; isAgency: boolean; badge?: number }) {
   const path = usePathname();
   const base = `/c/${clientId}`;
   const items = [
@@ -29,6 +29,7 @@ export function ClientNav({ clientId, isAgency }: { clientId: string; isAgency: 
           >
             <span className="font-mono text-[10px] text-purple">{i.n}</span>
             {i.label}
+            {i.href === base && badge > 0 ? <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-peach px-1.5 text-[11px] font-bold text-ink">{badge}</span> : null}
           </Link>
         );
       })}

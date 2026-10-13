@@ -267,3 +267,15 @@ export async function retryEditAction(clientId: string, editId: string) {
   await db.from("edits").update({ status, error: null }).eq("id", editId).eq("client_id", clientId).eq("status", "failed");
   revalidatePath(`/c/${clientId}/videos`);
 }
+
+// ───────────────────────────── Vista cliente ─────────────────────────────
+
+/** La agencia entra/sale de "ver como cliente" para un cliente. */
+export async function setPreviewAction(clientId: string, on: boolean) {
+  await requireAgency();
+  const { cookies } = await import("next/headers");
+  const jar = await cookies();
+  if (on) jar.set("pra_preview_client", clientId, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 8 });
+  else jar.delete("pra_preview_client");
+  redirect(`/c/${clientId}`);
+}

@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 
 const TONES = ["Chistoso", "Directo", "Cálido", "Elegante", "Experto", "De barrio", "Inspirador", "Relajado", "Atrevido", "Familiar", "Premium", "Bilingüe / spanglish"];
 
-export default async function IntakePage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ ok?: string }> }) {
+export default async function IntakePage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ ok?: string; back?: string }> }) {
   const { token } = await params;
-  const { ok } = await searchParams;
+  const { ok, back } = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(token) || !process.env.NEXT_PUBLIC_SUPABASE_URL) notFound();
   const { data: client } = await supabaseAdmin().from("clients").select("name").eq("intake_token", token).maybeSingle();
   if (!client) notFound();
@@ -31,6 +31,7 @@ export default async function IntakePage({ params, searchParams }: { params: Pro
             contenido que suene a ti.
           </p>
           <form action={submitIntakeAction.bind(null, token)} className="mt-8 space-y-6">
+            {back ? <input type="hidden" name="back" value={back} /> : null}
             <F l="Tu nombre"><input name="nombre" className="input" /></F>
             <F l="¿Qué hace tu negocio? Explícalo como a un amigo"><textarea name="negocio" rows={3} className="input" /></F>
             <F l="Tus productos o servicios principales (y precios aproximados)"><textarea name="productos" rows={3} className="input" /></F>

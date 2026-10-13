@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { loadClient } from "@/server/load";
+import { loadClient, loadPendings } from "@/server/load";
 import { styleForClient } from "@/server/engine";
 import { ApiButton } from "@/components/ApiButton";
 import { PageTitle } from "@/components/Shell";
@@ -8,9 +8,11 @@ import { EngineRunner } from "@/components/EngineRunner";
 import { CopyLink } from "@/components/CopyLink";
 import { SubmitButton } from "@/components/SubmitButton";
 
-export default async function ClientHome({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientHome({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gracias?: string }> }) {
   const { id } = await params;
+  const { gracias } = await searchParams;
   const ctx = await loadClient(id);
+  const pend = await loadPendings(id);
   const { db, client, brand, isAgency, activeMood } = ctx;
 
   const [{ count: compCount }, { count: analyzed }, { data: plan }, { data: edits }, { count: reportCount }] = await Promise.all([
@@ -82,6 +84,49 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
     <>
       <PageTitle kicker="Content Engine" title={isAgency ? client.name : `Hola, ${client.name}`} />
 
+      {gracias ? (
+        <div className="mb-6 rounded-2xl bg-sun/60 px-5 py-4 text-sm">
+          <b>¡Gracias!</b> Ya tenemos tu información. {isAgency ? "" : (reportCount ?? 0) > 0 ? "La vamos a tomar en cuenta en tu próximo análisis." : "Ahora arranca tu análisis abajo."}
+        </div>
+      ) : null}
+
+      {!isAgency && (reportCount ?? 0) === 0 ? (
+        <section className="card mb-6 p-6" style={{ background: "linear-gradient(120deg, #fffded, #fff 65%)" }}>
+          <div className="display text-[11px] text-purple">Bienvenido</div>
+          <h2 className="mt-1 text-2xl font-bold">Tu motor de contenido</h2>
+          <p className="mt-1 text-sm text-muted">Tres pasos y tienes tu estrategia y tus videos de la semana.</p>
+          <ol className="mt-5 space-y-3 text-sm">
+            <li className="flex items-center gap-3">
+              <span className={`grid h-7 w-7 place-items-center rounded-full text-xs ${pend.list.some((p) => p.key === "intake") ? "bg-sun" : "bg-ok/15 text-ok"}`}>{pend.list.some((p) => p.key === "intake") ? "1" : "✓"}</span>
+              <span className="flex-1">Cuéntanos de tu negocio</span>
+              {pend.list.some((p) => p.key === "intake") ? <Link href={`/intake/${client.intake_token}?back=/c/${id}`} className="btn btn-primary">Llenar (5 min)</Link> : null}
+            </li>
+            <li className="flex items-center gap-3"><span className="grid h-7 w-7 place-items-center rounded-full bg-line text-xs">2</span><span className="flex-1">Arranca tu análisis (aquí abajo)</span></li>
+            <li className="flex items-center gap-3"><span className="grid h-7 w-7 place-items-center rounded-full bg-line text-xs">3</span><span className="flex-1">Lee tu reporte y graba tus videos</span></li>
+          </ol>
+        </section>
+      ) : null}
+
+      {pend.list.length ? (
+        <section className="card mb-6 p-5">
+          <div className="flex items-center gap-2">
+            <span className="grid h-6 min-w-6 place-items-center rounded-full bg-peach px-1.5 text-xs font-bold">{pend.list.length}</span>
+            <h2 className="font-semibold">{isAgency ? "Pendientes del cliente" : "Te falta"}</h2>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {pend.list.map((p) => (
+              <li key={p.key}>
+                <Link href={p.href} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5 text-sm transition hover:border-purple hover:bg-cream">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${p.tone === "todo" ? "bg-peach" : "bg-sun"}`} />
+                  <span className="flex-1">{p.text}</span>
+                  <span className="text-xs text-muted">{p.tone === "tip" ? "sugerencia" : "→"}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {(reportCount ?? 0) > 0 ? (
         <Link href={`/c/${id}/reporte`} className="card glow mb-6 flex items-center justify-between gap-4 p-5 transition hover:border-purple">
           <div>
@@ -93,7 +138,11 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
         </Link>
       ) : null}
 
-      {isAgency ? <EngineRunner clientId={id} hasReport={(reportCount ?? 0) > 0} /> : null}
+      {isAgency ? (
+        <EngineRunner clientId={id} hasReport={(reportCount ?? 0) > 0} />
+      ) : (reportCount ?? 0) === 0 ? (
+        <EngineRunner clientId={id} hasReport={false} forClient />
+      ) : null}
 
       {isAgency ? (
         <details className="group">
@@ -142,7 +191,7 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
       ) : null}
 
       {questions.length ? (
-        <section className="mt-10">
+        <section id="preguntas" className="mt-10 scroll-mt-24">
           <h2 className="text-lg font-semibold">Preguntas rápidas para afinar tu contenido</h2>
           <p className="text-sm text-muted">Contesta las que puedas. Al guardar, la pregunta desaparece.</p>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
