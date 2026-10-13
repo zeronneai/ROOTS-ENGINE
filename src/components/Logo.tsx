@@ -1,15 +1,13 @@
+/* eslint-disable @next/next/no-img-element */
+
+/** Logo real de Purple Roots: monograma PR + wordmark, con "Roots Engine" como producto. */
 export function Logo({ small = false }: { small?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <div
-        className="grid place-items-center rounded-full border border-lavender/40 text-lavender glow"
-        style={{ width: small ? 34 : 42, height: small ? 34 : 42, fontFamily: "Georgia, 'Times New Roman', serif", fontSize: small ? 18 : 22 }}
-      >
-        R
-      </div>
-      <div className="leading-tight">
-        <div className="display text-[13px] text-white">Roots Engine</div>
-        {!small && <div className="text-[10px] tracking-[0.3em] text-muted uppercase">Purple Roots Agency</div>}
+      <img src="/brand/pr-icon.png" alt="Purple Roots" style={{ height: small ? 30 : 42, width: "auto" }} />
+      <div className="flex flex-col gap-1.5 border-l border-line pl-3">
+        <img src="/brand/pr-wordmark.png" alt="Purple Roots" style={{ height: small ? 12 : 16, width: "auto" }} />
+        <span className="display text-[9px] leading-none text-lavender">Roots Engine</span>
       </div>
     </div>
   );
