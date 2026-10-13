@@ -55,7 +55,8 @@ async function transcribeLocal(input: string, language?: string | null) {
   const wav = `${input}.16k.wav`;
   execFileSync("ffmpeg", ["-v", "error", "-y", "-i", input, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav]);
 
-  const lang = language === "en" ? "en" : language === "es" ? "es" : null; // bilingüe: que detecte solo
+  // bilingüe: "auto" para que detecte el idioma. Sin idioma, whisper.cpp asume inglés y TRADUCE el español.
+  const lang = language === "en" ? "en" : language === "es" ? "es" : "auto";
   const out = await transcribe({
     inputPath: wav,
     whisperPath: WHISPER_DIR,
