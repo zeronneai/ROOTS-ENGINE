@@ -9,7 +9,7 @@
  */
 import "./load-env";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { supabaseAdmin } from "../src/lib/supabase/admin";
@@ -211,10 +211,11 @@ async function stepRender() {
         }
       },
     );
+    const final = fitUnderLimit(out, dir);
     const outputPath = `${edit.client_id}/${edit.id}.mp4`;
     const { error: upErr } = await db.storage
       .from("renders")
-      .upload(outputPath, readFileSync(out), { contentType: "video/mp4", upsert: true });
+      .upload(outputPath, readFileSync(final), { contentType: "video/mp4", upsert: true });
     if (upErr) throw upErr;
     await db.from("edits").update({ status: "done", output_path: outputPath }).eq("id", edit.id);
     if (edit.idea_id) await db.from("content_ideas").update({ status: "edited" }).eq("id", edit.idea_id);
@@ -225,6 +226,29 @@ async function stepRender() {
     rmSync(dir, { recursive: true, force: true });
   }
   return true;
+}
+
+/**
+ * El plan gratis de Supabase acepta archivos de hasta 50 MB (MAX_UPLOAD_MB para cambiarlo).
+ * Si el MP4 se pasa, lo volvemos a comprimir calculando el bitrate para que quepa.
+ */
+const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB) || 50;
+function fitUnderLimit(file: string, dir: string) {
+  const limit = MAX_UPLOAD_MB * 1024 * 1024 * 0.92;
+  const size = statSync(file).size;
+  if (size <= limit) return file;
+  const { duration } = probe(file);
+  const audioKbps = 160;
+  const videoKbps = Math.max(1500, Math.floor((limit * 8) / duration / 1000 - audioKbps));
+  console.log(`   el MP4 pesa ${(size / 1e6).toFixed(0)} MB, comprimiendo a ~${(videoKbps / 1000).toFixed(1)} Mbps para que quepa...`);
+  const out = path.join(dir, "final.mp4");
+  execFileSync("ffmpeg", [
+    "-v", "error", "-y", "-i", file,
+    "-c:v", "libx264", "-preset", "medium", "-b:v", `${videoKbps}k`, "-maxrate", `${videoKbps}k`, "-bufsize", `${videoKbps * 2}k`,
+    "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", `${audioKbps}k`, "-movflags", "+faststart", out,
+  ]);
+  console.log(`   listo: ${(statSync(out).size / 1e6).toFixed(0)} MB`);
+  return out;
 }
 
 /** Si el worker se cayó a medio proceso, regresa esas ediciones a la fila. */

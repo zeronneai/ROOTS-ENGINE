@@ -34,7 +34,7 @@ export async function renderAutoEdit(props: AutoEditProps, outputLocation: strin
     outputLocation,
     inputProps,
     browserExecutable,
-    crf: 20,
+    crf: 23,
     audioBitrate: "192k",
     concurrency: Number(process.env.REMOTION_CONCURRENCY) || null,
     onProgress: ({ progress }) => onProgress?.(progress),

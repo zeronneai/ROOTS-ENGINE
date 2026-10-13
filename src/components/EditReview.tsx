@@ -21,6 +21,7 @@ export function EditReview(props: {
   handle: string | null;
   notes?: string | null;
   assetUrls?: Record<string, string>;
+  isAgency?: boolean;
   brandName?: string | null;
   canApprove: boolean;
 }) {
@@ -63,7 +64,11 @@ export function EditReview(props: {
         }
       }
       if (kind === "approve")
-        setSummary("Mandado a exportar. Tu compu con el worker lo renderiza: en PowerShell vas a ver el avance y aquí aparece el MP4 al terminar.");
+        setSummary(
+          props.isAgency
+            ? "Mandado a exportar. La compu con el worker lo renderiza (en PowerShell ves el avance) y aquí aparece el MP4 al terminar."
+            : "¡Listo! Tu video se está exportando. En unos minutos aparece aquí para descargarlo.",
+        );
       router.refresh();
     } catch (e) {
       setErr((e as Error).message);

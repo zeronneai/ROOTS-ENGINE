@@ -6,10 +6,12 @@ import { EditReview } from "@/components/EditReview";
 import type { StyleOverrides } from "@/lib/styles/types";
 import type { Edl } from "@/lib/edl/types";
 import { assetUrlsForEdl } from "@/lib/assets";
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { Spinner } from "@/components/ApiButton";
 
 export default async function EditPage({ params }: { params: Promise<{ id: string; editId: string }> }) {
   const { id, editId } = await params;
-  const { db, client, brand, moods } = await loadClient(id);
+  const { db, client, brand, moods, isAgency } = await loadClient(id);
   const { data: edit } = await db
     .from("edits")
     .select("*, recordings(storage_path, original_name), content_ideas(title)")
@@ -37,6 +39,32 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
         <Link href={`/c/${id}/videos`} className="btn btn-ghost">← Videos</Link>
         {rendered.data?.signedUrl ? <a href={rendered.data.signedUrl} className="btn btn-primary">Descargar MP4</a> : null}
       </PageTitle>
+
+      {["queued", "transcribing", "directing", "directing_claimed", "render_queued", "rendering"].includes(edit.status) ? (
+        <div className="card mb-6 flex items-center gap-3 border-purple/30 bg-cream p-4 text-sm">
+          <AutoRefresh />
+          <Spinner />
+          <div>
+            <div className="font-semibold">
+              {edit.status === "render_queued" || edit.status === "rendering" ? "Exportando tu video..." : "Editando tu video..."}
+            </div>
+            <div className="text-muted">
+              {isAgency
+                ? "Lo procesa la compu con el worker. Si no avanza, revisa que esté prendida y con npm run worker corriendo."
+                : "Tarda unos minutos. Puedes salir de esta página, aquí te va a esperar listo."}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {edit.status === "failed" ? (
+        <div className="card mb-6 border-bad/40 p-4 text-sm">
+          <div className="font-semibold text-bad">No se pudo terminar este video</div>
+          <div className="mt-1 text-muted">
+            {isAgency ? edit.error : "Ya le avisamos al equipo. Puedes volver a intentar con “Aprobar y exportar”."}
+          </div>
+        </div>
+      ) : null}
 
       {edit.status === "done" && rendered.data?.signedUrl ? (
         <div className="mb-10 grid gap-6 md:grid-cols-[320px_1fr]">
@@ -77,6 +105,7 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
           brandName={client.name}
           notes={edit.notes}
           assetUrls={assetUrls}
+          isAgency={isAgency}
           initial={{ presetId: edit.style_id ?? client.edit_style_id, moodId: edit.mood_id ?? brand.active_mood_id, overrides: (edit.style_overrides ?? {}) as StyleOverrides }}
           canApprove={["review", "done", "failed"].includes(edit.status)}
         />

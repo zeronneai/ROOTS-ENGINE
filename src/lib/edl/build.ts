@@ -226,18 +226,17 @@ export function buildEdl(opts: {
   const underImage = (t: number, before = 0.3) => images.some((im) => t >= im.at - before && t <= im.at + im.duration);
   // la imagen ocupa la parte de arriba: ahí no van textos animados
   for (let i = callouts.length - 1; i >= 0; i--) if (underImage(callouts[i].at, callouts[i].duration)) callouts.splice(i, 1);
-  const underCallout = (t: number) => underImage(t) || callouts.some((c) => t >= c.at - 0.3 && t <= c.at + c.duration);
+  const underCallout = (t: number) => callouts.some((c) => t >= c.at - 0.3 && t <= c.at + c.duration);
 
   const emojiY = style.captions.position === "upper" ? 0.62 : 0.31;
   const emojis: Edl["emojis"] = (style.emojis.density === "none" ? [] : direction.emojis)
-    .filter((e) => words[e.word] && !removed.has(e.word) && !underCallout(words[e.word].start))
-    .map((e, k) => ({
-      at: words[e.word].start,
-      duration: 1.4,
-      emoji: e.emoji,
-      x: k % 2 === 0 ? 0.76 : 0.24,
-      y: emojiY + (k % 3) * 0.03,
-    }));
+    .filter((e) => words[e.word] && !removed.has(e.word) && !underImage(words[e.word].start))
+    .map((e, k) => {
+      const at = words[e.word].start;
+      // si hay un texto animado arriba en ese momento, el emoji baja un poco para no encimarse
+      const shift = underCallout(at) && style.captions.position !== "upper" ? 0.1 : 0;
+      return { at, duration: 1.4, emoji: e.emoji, x: k % 2 === 0 ? 0.76 : 0.24, y: emojiY + shift + (k % 3) * 0.03 };
+    });
 
   const sfx: Edl["sfx"] = [];
   if (style.sfx.enabled) {
