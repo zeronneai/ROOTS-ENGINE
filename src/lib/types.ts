@@ -97,6 +97,7 @@ export type ClientRow = {
   plan_tier: "plan" | "edit" | "auto" | "full";
   edit_style_id: string | null;
   status: string;
+  intake_token?: string;
   created_at: string;
 };
 

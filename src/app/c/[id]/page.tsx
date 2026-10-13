@@ -4,17 +4,20 @@ import { styleForClient } from "@/server/engine";
 import { ApiButton } from "@/components/ApiButton";
 import { PageTitle } from "@/components/Shell";
 import { addBrandInputAction } from "@/app/actions";
+import { EngineRunner } from "@/components/EngineRunner";
+import { CopyLink } from "@/components/CopyLink";
 
 export default async function ClientHome({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await loadClient(id);
   const { db, client, brand, isAgency, activeMood } = ctx;
 
-  const [{ count: compCount }, { count: analyzed }, { data: plan }, { data: edits }] = await Promise.all([
+  const [{ count: compCount }, { count: analyzed }, { data: plan }, { data: edits }, { count: reportCount }] = await Promise.all([
     db.from("competitors").select("id", { count: "exact", head: true }).eq("client_id", id).eq("is_own_account", false),
     db.from("competitor_posts").select("id", { count: "exact", head: true }).eq("client_id", id).not("analysis", "is", null),
     db.from("content_plans").select("id, week_start, content_ideas(status)").eq("client_id", id).order("week_start", { ascending: false }).limit(1).maybeSingle(),
     db.from("edits").select("status").eq("client_id", id),
+    db.from("reports").select("id", { count: "exact", head: true }).eq("client_id", id),
   ]);
   const style = styleForClient(ctx);
   const ideas = (plan?.content_ideas ?? []) as { status: string }[];
@@ -74,6 +77,8 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
     <>
       <PageTitle kicker="Content Engine" title={isAgency ? client.name : `Hola, ${client.name}`} />
 
+      {isAgency ? <EngineRunner clientId={id} hasReport={(reportCount ?? 0) > 0} /> : null}
+
       <ol className="card divide-y divide-line/60">
         {steps.map((s) => (
           <li key={s.n} className="flex flex-wrap items-center gap-4 p-4">
@@ -106,6 +111,15 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
               </form>
             ))}
           </div>
+        </section>
+      ) : null}
+      {isAgency ? (
+        <section className="card mt-10 p-5">
+          <div className="font-semibold">Formulario para el cliente (opcional)</div>
+          <p className="mt-1 text-sm text-muted">
+            Mándale este link por WhatsApp. No necesita cuenta: llena sus datos y su tono, y todo cae a su Brand Brain.
+          </p>
+          <CopyLink path={`/intake/${client.intake_token ?? ""}`} />
         </section>
       ) : null}
     </>

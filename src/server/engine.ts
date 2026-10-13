@@ -19,6 +19,7 @@ import {
   type ScrapedPost,
 } from "@/lib/scrape/apify";
 import { discoveryQueries, pickCompetitors, type Candidate } from "@/lib/ai/discover";
+import { buildReport } from "@/lib/ai/report";
 
 type DB = SupabaseClient;
 
@@ -97,6 +98,7 @@ export async function synthesizeBrandFor(db: DB, clientId: string) {
       .limit(15),
   ]);
   const moodName = (id: string | null) => ctx.moods.find((m) => m.id === id)?.name ?? null;
+  const site = ctx.client.website ? await fetchWebsiteText(ctx.client.website) : null;
 
   const brain = await synthesizeBrand({
     client: ctx.client,
@@ -109,7 +111,11 @@ export async function synthesizeBrandFor(db: DB, clientId: string) {
       added_by_role: i.added_by_role,
       created_at: i.created_at,
       mood_name: moodName(i.mood_id),
-    })),
+    })).concat(
+      site
+        ? [{ kind: "link", title: "Texto de su sitio web", content: site, url: ctx.client.website, added_by_role: "agency" as const, created_at: "", mood_name: null }]
+        : [],
+    ),
     ownPosts: (own ?? []).map((p) => ({ caption: p.caption, views: p.views, transcript: p.transcript })),
   });
 
@@ -215,8 +221,16 @@ export async function discoverCompetitors(db: DB, clientId: string, max = 8) {
   return { hashtags: q, added: picks.length };
 }
 
-export async function scanCompetitors(db: DB, clientId: string, perAccount = 30) {
-  const { data: comps } = await db.from("competitors").select("*").eq("client_id", clientId);
+export async function scanCompetitors(
+  db: DB,
+  clientId: string,
+  perAccount = 30,
+  only: "all" | "own" | "others" = "all",
+) {
+  let query = db.from("competitors").select("*").eq("client_id", clientId);
+  if (only === "own") query = query.eq("is_own_account", true);
+  if (only === "others") query = query.eq("is_own_account", false);
+  const { data: comps } = await query;
   if (!comps?.length) return { scanned: 0, posts: 0 };
 
   const ig = comps.filter((c) => c.platform === "instagram").map((c) => c.handle);
@@ -391,4 +405,76 @@ export async function generatePlan(
   const { error: e2 } = await db.from("content_ideas").insert(ideas);
   if (e2) throw e2;
   return planRow.id as string;
+}
+
+// ───────────────────────────── Sitio web ─────────────────────────────
+
+/** Lee el texto visible del sitio del cliente (para que el Brand Brain no dependa de que alguien lo escriba). */
+export async function fetchWebsiteText(url: string): Promise<string | null> {
+  try {
+    const u = url.startsWith("http") ? url : `https://${url}`;
+    const res = await fetch(u, { signal: AbortSignal.timeout(10000), headers: { "User-Agent": "Mozilla/5.0 RootsEngine" } });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/\s+/g, " ")
+      .trim();
+    return text ? text.slice(0, 6000) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ───────────────────────────── Reporte ─────────────────────────────
+
+export async function generateReport(db: DB, clientId: string) {
+  const ctx = await getClientContext(db, clientId);
+  const [{ data: comps }, { data: ownPosts }, { data: winners }] = await Promise.all([
+    db.from("competitors").select("*").eq("client_id", clientId),
+    db
+      .from("competitor_posts")
+      .select("caption, views, likes, comments, competitors!inner(is_own_account)")
+      .eq("client_id", clientId)
+      .eq("competitors.is_own_account", true)
+      .order("views", { ascending: false, nullsFirst: false })
+      .limit(8),
+    db
+      .from("competitor_posts")
+      .select("views, outlier_score, analysis, competitors!inner(handle, is_own_account)")
+      .eq("client_id", clientId)
+      .eq("competitors.is_own_account", false)
+      .not("analysis", "is", null)
+      .order("outlier_score", { ascending: false })
+      .limit(10),
+  ]);
+  const own = (comps ?? []).find((c) => c.is_own_account);
+  const { count: ownCount } = own
+    ? await db.from("competitor_posts").select("id", { count: "exact", head: true }).eq("competitor_id", own.id)
+    : { count: 0 };
+
+  const data = await buildReport({
+    client: { name: ctx.client.name, niche: ctx.client.niche, city: ctx.client.city, plan_tier: ctx.client.plan_tier },
+    brand: ctx.brand.data,
+    ownStats: own
+      ? { handle: own.handle, platform: own.platform, posts: ownCount ?? 0, medianViews: Number(own.median_views ?? 0), followers: own.followers }
+      : null,
+    ownTopPosts: (ownPosts ?? []).map((p) => ({ caption: p.caption?.slice(0, 300) ?? null, views: p.views, likes: p.likes, comments: p.comments })),
+    competitors: (comps ?? [])
+      .filter((c) => !c.is_own_account)
+      .map((c) => ({ handle: c.handle, platform: c.platform, kind: c.kind ?? "competitor", note: c.note ?? null, medianViews: c.median_views })),
+    winners: (winners ?? []).map((w) => ({
+      handle: (w.competitors as unknown as { handle: string }).handle,
+      views: w.views,
+      outlier_score: w.outlier_score,
+      analysis: w.analysis as PostAnalysis | null,
+    })),
+  });
+  const { data: row, error } = await db.from("reports").insert({ client_id: clientId, data }).select("id").single();
+  if (error) throw error;
+  return row.id as string;
 }

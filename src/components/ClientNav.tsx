@@ -7,6 +7,7 @@ export function ClientNav({ clientId, isAgency }: { clientId: string; isAgency: 
   const base = `/c/${clientId}`;
   const items = [
     { href: base, label: "Resumen", n: "00" },
+    { href: `${base}/reporte`, label: "Reporte", n: "✦" },
     { href: `${base}/marca`, label: "Marca", n: "01" },
     { href: `${base}/competencia`, label: "Competencia", n: "02" },
     { href: `${base}/plan`, label: "Plan semanal", n: "03" },

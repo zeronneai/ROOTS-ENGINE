@@ -143,3 +143,11 @@ body {
   color: #d9cff0;
   background: rgba(139, 92, 246, 0.08);
 }
+
+/* Imprimir reporte (Descargar PDF) */
+@media print {
+  header, aside, nav, .print\:hidden { display: none !important; }
+  body { background: #0b0710 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  main { padding: 0 !important; }
+  .break-inside-avoid { break-inside: avoid; }
+}
