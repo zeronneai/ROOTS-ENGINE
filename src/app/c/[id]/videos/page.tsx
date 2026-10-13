@@ -5,6 +5,7 @@ import { Empty, PageTitle } from "@/components/Shell";
 import { UploadRecording } from "@/components/UploadRecording";
 import { retryEditAction } from "@/app/actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { LiveEdits } from "@/components/LiveEdits";
 
 const EDIT_STATUS: Record<string, { l: string; c: string }> = {
   queued: { l: "En fila", c: "text-muted" },
@@ -46,6 +47,7 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
 
   return (
     <>
+      <LiveEdits clientId={id} poll={(edits ?? []).some((e) => !["review", "done", "failed", "agency_editing"].includes(e.status))} />
       <PageTitle kicker="04 · Videos" title="Grabaciones y ediciones" />
       <div className="grid gap-8 xl:grid-cols-[1fr_340px]">
         <section className="space-y-3">

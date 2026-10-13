@@ -6,7 +6,7 @@ import { EditReview } from "@/components/EditReview";
 import type { StyleOverrides } from "@/lib/styles/types";
 import type { Edl } from "@/lib/edl/types";
 import { assetUrlsForEdl } from "@/lib/assets";
-import { AutoRefresh } from "@/components/AutoRefresh";
+import { LiveEdits } from "@/components/LiveEdits";
 import { Spinner } from "@/components/ApiButton";
 
 export default async function EditPage({ params }: { params: Promise<{ id: string; editId: string }> }) {
@@ -33,16 +33,17 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
   const edl = edit.edl as Edl | null;
   const cutSecs = edl && tr ? tr.duration - edl.segments.reduce((a, s) => a + s.end - s.start, 0) : 0;
 
+  const processing = ["queued", "transcribing", "directing", "directing_claimed", "render_queued", "rendering"].includes(edit.status);
   return (
     <>
+      <LiveEdits editId={edit.id} poll={processing} />
       <PageTitle kicker="Revisión" title={edit.content_ideas?.title ?? edit.recordings.original_name}>
         <Link href={`/c/${id}/videos`} className="btn btn-ghost">← Videos</Link>
         {rendered.data?.signedUrl ? <a href={rendered.data.signedUrl} className="btn btn-primary">Descargar MP4</a> : null}
       </PageTitle>
 
-      {["queued", "transcribing", "directing", "directing_claimed", "render_queued", "rendering"].includes(edit.status) ? (
+      {processing ? (
         <div className="card mb-6 flex items-center gap-3 border-purple/30 bg-cream p-4 text-sm">
-          <AutoRefresh />
           <Spinner />
           <div>
             <div className="font-semibold">
