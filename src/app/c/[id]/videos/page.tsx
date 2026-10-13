@@ -80,7 +80,7 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
             <UploadRecording clientId={id} ideas={ideas ?? []} defaultIdea={idea} modes={modes} />
           ) : (
             <div className="card p-5 text-sm text-muted">
-              Tu plan incluye investigación, ideas y guiones. Para que editemos tus videos, pásate a <b className="text-white">Roots Auto</b> o <b className="text-white">Roots Edit</b>.
+              Tu plan incluye investigación, ideas y guiones. Para que editemos tus videos, pásate a <b className="text-ink">Roots Auto</b> o <b className="text-ink">Roots Edit</b>.
             </div>
           )}
         </aside>

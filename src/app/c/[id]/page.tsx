@@ -97,7 +97,7 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
 
       {isAgency ? (
         <details className="group">
-          <summary className="mb-3 cursor-pointer list-none text-sm text-muted hover:text-white">
+          <summary className="mb-3 cursor-pointer list-none text-sm text-muted hover:text-ink">
             <span className="group-open:hidden">▸</span><span className="hidden group-open:inline">▾</span> Estado de cada paso (y correrlos por separado)
           </summary>
       <ol className="card divide-y divide-line/60">

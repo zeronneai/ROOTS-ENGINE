@@ -116,11 +116,11 @@ export function StyleLab(props: {
           <section>
             <div className="label mb-3">Mood</div>
             <div className="flex flex-wrap gap-2">
-              <button className={`chip ${moodId === null ? "glow text-white" : ""}`} onClick={() => setMoodId(null)}>
+              <button className={`chip ${moodId === null ? "glow text-ink" : ""}`} onClick={() => setMoodId(null)}>
                 Normal
               </button>
               {props.moods.map((m) => (
-                <button key={m.id} className={`chip ${moodId === m.id ? "glow text-white" : ""}`} onClick={() => setMoodId(m.id)}>
+                <button key={m.id} className={`chip ${moodId === m.id ? "glow text-ink" : ""}`} onClick={() => setMoodId(m.id)}>
                   {m.name}
                 </button>
               ))}

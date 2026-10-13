@@ -41,7 +41,7 @@ export default async function IntakePage({ params, searchParams }: { params: Pro
               <div className="label mb-2">¿Cómo se siente tu marca? (escoge las que quieras)</div>
               <div className="flex flex-wrap gap-2">
                 {TONES.map((t) => (
-                  <label key={t} className="chip cursor-pointer has-[:checked]:glow has-[:checked]:text-white">
+                  <label key={t} className="chip cursor-pointer has-[:checked]:glow has-[:checked]:text-ink">
                     <input type="checkbox" name="tono" value={t} className="sr-only" />
                     {t}
                   </label>

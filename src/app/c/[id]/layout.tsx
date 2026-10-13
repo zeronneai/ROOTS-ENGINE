@@ -14,7 +14,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
       <TopBar
         right={
           <>
-            {isAgency ? <Link href="/agency" className="text-muted hover:text-white">← Clientes</Link> : null}
+            {isAgency ? <Link href="/agency" className="text-muted hover:text-ink">← Clientes</Link> : null}
             <span className="hidden text-muted sm:inline">{viewer.email}</span>
           </>
         }

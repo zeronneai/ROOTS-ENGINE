@@ -3,7 +3,7 @@ import { Logo } from "./Logo";
 
 export function TopBar({ right }: { right?: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-line/60 bg-ink/80 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-line/60 bg-white/85 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
         <Link href="/agency">
           <Logo small />

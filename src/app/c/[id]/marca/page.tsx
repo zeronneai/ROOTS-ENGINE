@@ -59,7 +59,7 @@ export default async function MarcaPage({ params }: { params: Promise<{ id: stri
                 <Swatch c={b.visual?.primaryColor} l="Principal" />
                 <Swatch c={b.visual?.accentColor} l="Acento (subtítulos)" />
                 <div className="text-sm text-muted">
-                  Mood visual: <span className="text-white">{b.visual?.mood}</span>
+                  Mood visual: <span className="text-ink">{b.visual?.mood}</span>
                   <br />
                   Estilo recomendado: <span className="text-lavender">{b.visual?.recommendedPresetId}</span>. {b.visual?.presetReason}
                 </div>

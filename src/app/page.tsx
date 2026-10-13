@@ -28,7 +28,7 @@ export default function Home() {
           <h1 className="mt-5 text-4xl font-extrabold leading-[1.05] sm:text-6xl">
             Deja de adivinar
             <br />
-            <span className="bg-gradient-to-r from-lavender to-purple bg-clip-text text-transparent">qué publicar.</span>
+            <span className="mark text-purple">qué publicar.</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg text-muted">
             Roots Engine investiga a tu competencia, te dice exactamente qué grabar esta semana y edita tus videos con el
@@ -52,7 +52,7 @@ export default function Home() {
             </span>
           </div>
           {STEPS.map((s) => (
-            <li key={s.n} className="flex gap-4 rounded-xl px-3 py-3 hover:bg-white/[0.03]">
+            <li key={s.n} className="flex gap-4 rounded-xl px-3 py-3 hover:bg-purple/5">
               <span className="font-mono text-xs text-purple">{s.n}</span>
               <div>
                 <div className="font-semibold">{s.t}</div>

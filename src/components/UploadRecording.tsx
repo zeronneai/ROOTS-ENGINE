@@ -47,7 +47,7 @@ export function UploadRecording(props: {
       <div className="font-semibold">Subir grabación</div>
       <label className="grid cursor-pointer place-items-center rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted hover:border-purple">
         <input type="file" accept="video/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        {file ? <span className="text-white">{file.name} · {(file.size / 1e6).toFixed(0)} MB</span> : "Toca para escoger el video"}
+        {file ? <span className="text-ink">{file.name} · {(file.size / 1e6).toFixed(0)} MB</span> : "Toca para escoger el video"}
       </label>
       <select className="input" value={idea} onChange={(e) => setIdea(e.target.value)}>
         <option value="">¿De qué idea del plan es? (opcional)</option>
