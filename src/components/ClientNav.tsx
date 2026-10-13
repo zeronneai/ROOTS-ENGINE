@@ -24,7 +24,7 @@ export function ClientNav({ clientId, isAgency, badge = 0 }: { clientId: string;
             key={i.href}
             href={i.href}
             className={`flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-sm transition ${
-              active ? "bg-cream text-ink glow" : "text-muted hover:text-ink"
+              active ? "bg-sun/60 font-semibold text-ink" : "text-muted hover:bg-cream hover:text-ink"
             }`}
           >
             <span className="font-mono text-[10px] text-purple">{i.n}</span>

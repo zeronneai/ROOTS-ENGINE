@@ -32,7 +32,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
         }
       />
       {previewing ? (
-        <div className="sticky top-[57px] z-30 bg-sun">
+        <div className="sticky top-[61px] z-30 bg-sun">
           <form action={setPreviewAction.bind(null, id, false)} className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm sm:px-5">
             <span><b>Vista cliente:</b> así lo ve {client.name}.</span>
             <SubmitButton className="btn btn-ghost !py-1 text-xs">Salir de vista cliente</SubmitButton>

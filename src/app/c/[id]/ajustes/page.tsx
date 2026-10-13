@@ -5,6 +5,7 @@ import { NICHES } from "@/lib/styles/presets";
 import { PLAN_TIERS } from "@/lib/types";
 import { addMemberAction, updateClientAction } from "@/app/actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { PasswordAccess } from "@/components/PasswordAccess";
 
 export default async function AjustesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -45,17 +46,24 @@ export default async function AjustesPage({ params }: { params: Promise<{ id: st
           </F>
           <div className="sm:col-span-2"><SubmitButton className="btn btn-primary">Guardar</SubmitButton></div>
         </form>
-        <aside className="card space-y-3 p-5">
-          <div className="font-semibold">Acceso del cliente</div>
-          <ul className="space-y-1 text-sm text-muted">
-            {(members ?? []).map((m) => <li key={m.email}>{m.email}</li>)}
-            {!members?.length ? <li>Nadie todavía</li> : null}
-          </ul>
-          <form action={addMemberAction.bind(null, id)} className="space-y-2">
-            <input name="email" type="email" required placeholder="correo del cliente" className="input" />
-            <SubmitButton className="btn btn-ghost w-full">Dar acceso</SubmitButton>
-          </form>
-          <p className="text-xs text-muted">Entra en /login con ese correo y le llega un link. Ve solo su propio portal.</p>
+        <aside className="space-y-4">
+          <div className="card space-y-3 p-5">
+            <div className="font-semibold">Acceso del cliente</div>
+            <p className="text-xs text-muted">Crea su usuario con contraseña y pásaselo. Entra en /login al instante, sin esperar correos.</p>
+            <PasswordAccess clientId={id} defaultEmail={members?.[0]?.email} />
+            {members?.length ? (
+              <ul className="space-y-1 border-t border-line pt-3 text-sm text-muted">
+                {members.map((m) => <li key={m.email}>✓ {m.email}</li>)}
+              </ul>
+            ) : null}
+          </div>
+          <div className="card space-y-2 p-5">
+            <div className="text-sm font-semibold">O que entre con link a su correo</div>
+            <form action={addMemberAction.bind(null, id)} className="space-y-2">
+              <input name="email" type="email" required placeholder="correo del cliente" className="input" />
+              <SubmitButton className="btn btn-ghost w-full">Dar acceso por correo</SubmitButton>
+            </form>
+          </div>
         </aside>
       </div>
     </>

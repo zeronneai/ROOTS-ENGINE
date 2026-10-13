@@ -36,7 +36,8 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* ── Parte 1 ── */}
-        <section className="card flex flex-col p-6">
+        <section className="card relative flex flex-col overflow-hidden p-6 pt-7">
+          <span className="absolute inset-x-0 top-0 h-1.5 bg-purple" />
           <div className="display text-[11px] text-purple">Parte 1</div>
           <h2 className="mt-1 text-2xl font-bold">Análisis</h2>
           <p className="text-sm text-muted">Mercado, competencia, marca, presencia digital y oferta.</p>
@@ -62,7 +63,8 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
         </section>
 
         {/* ── Parte 2 ── */}
-        <section className="card flex flex-col p-6">
+        <section className="card relative flex flex-col overflow-hidden p-6 pt-7">
+          <span className="absolute inset-x-0 top-0 h-1.5 bg-peach" />
           <div className="display text-[11px] text-purple">Parte 2</div>
           <h2 className="mt-1 text-2xl font-bold">Contenido</h2>
           <p className="text-sm text-muted">Estrategia, cómo grabar y qué grabar esta semana.</p>

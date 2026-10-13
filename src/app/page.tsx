@@ -53,7 +53,7 @@ export default function Home() {
           </div>
           {STEPS.map((s) => (
             <li key={s.n} className="flex gap-4 rounded-xl px-3 py-3 hover:bg-purple/5">
-              <span className="font-mono text-xs text-purple">{s.n}</span>
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-sun font-mono text-[11px] font-bold text-ink">{s.n}</span>
               <div>
                 <div className="font-semibold">{s.t}</div>
                 <div className="text-sm text-muted">{s.d}</div>

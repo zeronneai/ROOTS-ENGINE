@@ -7,16 +7,19 @@ import { NICHES } from "@/lib/styles/presets";
 import { PLAN_TIERS, type ClientRow } from "@/lib/types";
 import { Empty, NoBackend, PageTitle, TopBar } from "@/components/Shell";
 import { addAgencyMemberAction } from "../actions";
+import { createInviteAction, deleteInviteAction } from "../access-actions";
+import { CopyLink } from "@/components/CopyLink";
 import { SubmitButton } from "@/components/SubmitButton";
 
 export default async function AgencyHome() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return <NoBackend />;
   const viewer = await requireAgency();
   const db = supabaseAdmin();
-  const [{ data: clients }, { data: edits }, { data: ideas }] = await Promise.all([
+  const [{ data: clients }, { data: edits }, { data: ideas }, { data: invites }] = await Promise.all([
     db.from("clients").select("*").order("created_at", { ascending: false }),
     db.from("edits").select("client_id, status"),
     db.from("content_ideas").select("client_id, status, publish_date").gte("publish_date", weekAgo()),
+    db.from("signup_invites").select("*").is("used_at", null).order("created_at", { ascending: false }),
   ]);
 
   const count = (arr: { client_id: string; status: string }[] | null, id: string, statuses: string[]) =>
@@ -37,8 +40,9 @@ export default async function AgencyHome() {
           <Empty title="Todavía no hay clientes">Da de alta el primero con lo que ya saben de él. El resto lo completa el motor.</Empty>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {(clients as ClientRow[]).map((c) => (
-              <Link key={c.id} href={`/c/${c.id}`} className="card p-5 transition hover:border-purple/70">
+            {(clients as ClientRow[]).map((c, n) => (
+              <Link key={c.id} href={`/c/${c.id}`} className="card relative overflow-hidden p-5 pt-6 transition hover:border-purple/70">
+                <span className="absolute inset-x-0 top-0 h-1.5" style={{ background: ["#4f4789", "#ffb17a", "#fce762"][n % 3] }} />
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-lg font-semibold">{c.name}</div>
@@ -56,7 +60,39 @@ export default async function AgencyHome() {
           </div>
         )}
 
-        <section className="card mt-12 max-w-xl p-5">
+        <section className="card mt-12 p-5" style={{ background: "linear-gradient(120deg, #fffded, #fff 70%)" }}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Links de registro para clientes nuevos</h2>
+              <p className="text-sm text-muted">Cada link sirve una vez. El cliente llena sus datos, crea su contraseña y entra directo a su portal.</p>
+            </div>
+            <form action={createInviteAction} className="flex w-full flex-wrap gap-2 sm:w-auto">
+              <input name="label" placeholder="Para quién (opcional)" className="input sm:w-44" />
+              <select name="plan_tier" className="input sm:w-40" defaultValue="plan">
+                {Object.entries(PLAN_TIERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+              <SubmitButton className="btn btn-primary">+ Crear link</SubmitButton>
+            </form>
+          </div>
+          {invites?.length ? (
+            <ul className="mt-4 space-y-3">
+              {invites.map((i) => (
+                <li key={i.token} className="rounded-xl border border-line bg-white p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-medium">{i.label || "Sin nombre"}</span>
+                    <span className="chip">{PLAN_TIERS[i.plan_tier as keyof typeof PLAN_TIERS]?.label}</span>
+                    <form action={deleteInviteAction.bind(null, i.token)} className="ml-auto">
+                      <SubmitButton className="text-xs text-muted hover:text-bad">borrar</SubmitButton>
+                    </form>
+                  </div>
+                  <CopyLink path={`/empezar/${i.token}`} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+
+        <section className="card mt-6 max-w-xl p-5">
           <div className="label">Dar acceso a alguien del equipo</div>
           <form action={addAgencyMemberAction} className="mt-3 flex gap-2">
             <input name="email" type="email" required placeholder="correo@purpleroots.agency" className="input" />
@@ -76,7 +112,7 @@ function weekAgo() {
 
 function Stat({ n, l }: { n: number; l: string }) {
   return (
-    <div className="rounded-xl border border-line py-2">
+    <div className="rounded-xl bg-cream py-2">
       <div className="text-xl font-bold">{n}</div>
       <div className="text-[10px] uppercase tracking-wider text-muted">{l}</div>
     </div>

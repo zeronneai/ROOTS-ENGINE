@@ -152,7 +152,7 @@ export default async function ClientHome({ params, searchParams }: { params: Pro
       <ol className="card divide-y divide-line/60">
         {steps.map((s) => (
           <li key={s.n} className="flex flex-wrap items-center gap-4 p-4">
-            <span className={`grid h-8 w-8 place-items-center rounded-full text-xs ${s.ok ? "bg-ok/15 text-ok" : "bg-line text-muted"}`}>
+            <span className={`grid h-8 w-8 place-items-center rounded-full text-xs ${s.ok ? "bg-ok/15 text-ok" : "bg-sun text-ink"}`}>
               {s.ok ? "✓" : s.n}
             </span>
             <Link href={s.href} className="min-w-0 flex-1">
@@ -168,7 +168,7 @@ export default async function ClientHome({ params, searchParams }: { params: Pro
       <ol className="card divide-y divide-line/60">
         {steps.map((s) => (
           <li key={s.n} className="flex flex-wrap items-center gap-4 p-4">
-            <span className={`grid h-8 w-8 place-items-center rounded-full text-xs ${s.ok ? "bg-ok/15 text-ok" : "bg-line text-muted"}`}>
+            <span className={`grid h-8 w-8 place-items-center rounded-full text-xs ${s.ok ? "bg-ok/15 text-ok" : "bg-sun text-ink"}`}>
               {s.ok ? "✓" : s.n}
             </span>
             <Link href={s.href} className="min-w-0 flex-1">

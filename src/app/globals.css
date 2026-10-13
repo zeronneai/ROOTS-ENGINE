@@ -113,7 +113,7 @@ body {
 }
 .btn-ghost:hover {
   border-color: var(--color-purple);
-  background: var(--color-cream);
+  background: rgba(252, 231, 98, 0.25);
 }
 .btn:disabled {
   opacity: 0.55;
@@ -150,9 +150,9 @@ body {
   border-radius: 999px;
   padding: 0.18rem 0.6rem;
   font-size: 0.72rem;
-  border: 1px solid var(--color-line);
+  border: 1px solid rgba(252, 231, 98, 0.9);
   color: var(--color-ink);
-  background: var(--color-cream);
+  background: rgba(252, 231, 98, 0.32);
 }
 
 /* acento amarillo tipo marcatexto */
@@ -208,4 +208,20 @@ body {
   .input {
     font-size: 16px; /* evita el zoom automático de iPhone */
   }
+}
+
+/* franja de marca: morado, durazno, amarillo */
+.brand-stripe {
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-purple) 0 40%, var(--color-peach) 40% 70%, var(--color-sun) 70% 100%);
+}
+.kicker-dot::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--color-peach);
+  margin-right: 8px;
+  vertical-align: 1px;
 }

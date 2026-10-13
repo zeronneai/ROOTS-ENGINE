@@ -44,7 +44,7 @@ export function EngineRunner({ clientId, hasReport, forClient = false }: { clien
   const failed = ENGINE_STEPS.find((s) => states[s.id] === "error");
 
   return (
-    <section className="card glow mb-8 p-5">
+    <section className="card mb-8 overflow-hidden p-5" style={{ background: "linear-gradient(110deg, #fffded 0%, #ffffff 55%)", borderColor: "#fce762" }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="display text-xs text-lavender">Content Engine</div>
