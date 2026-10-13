@@ -16,6 +16,10 @@ import { supabaseAdmin } from "../src/lib/supabase/admin";
 import { transcribeWords } from "../src/lib/transcribe";
 import { detectSilences, fitWordsToSilences, type Silence } from "../src/lib/silence";
 import { directEdit } from "../src/lib/ai/direct-edit";
+import { moodFromDescription } from "../src/lib/ai/mood";
+import { mergeClips } from "../src/lib/merge-clips";
+import { sanitizeOverrides } from "../src/lib/styles/sanitize";
+import { deepMerge } from "../src/lib/styles/merge";
 import { buildEdl } from "../src/lib/edl/build";
 import { getClientContext, styleForClient } from "../src/server/engine";
 import { renderAutoEdit } from "../src/server/render";
@@ -89,7 +93,20 @@ async function stepTranscribe() {
   const dir = mkdtempSync(path.join(tmpdir(), "roots-"));
   try {
     console.log(`→ transcribiendo ${edit.id}`);
-    const file = await download(edit.recordings.storage_path, dir);
+    let file = await download(edit.recordings.storage_path, dir);
+    const extra: string[] = edit.extra_paths ?? [];
+    if (extra.length) {
+      console.log(`   uniendo ${extra.length + 1} clips...`);
+      const files = [file];
+      for (const p of extra) files.push(await download(p, dir));
+      file = mergeClips(files, dir);
+      const sourcePath = `${edit.client_id}/${edit.id}-unido.mp4`;
+      const { error: upErr } = await db.storage
+        .from("recordings")
+        .upload(sourcePath, readFileSync(file), { contentType: "video/mp4", upsert: true });
+      if (upErr) throw new Error(`No se pudo guardar el video unido (${upErr.message}). Si es muy largo, súbelo en menos clips.`);
+      await db.from("edits").update({ source_path: sourcePath }).eq("id", edit.id);
+    }
     const meta = probe(file);
     const { data: client } = await db.from("clients").select("language").eq("id", edit.client_id).single();
     const t = await transcribeWords(file, client?.language);
@@ -115,10 +132,23 @@ async function stepDirect() {
   try {
     console.log(`→ dirigiendo ${edit.id}`);
     const ctx = await getClientContext(db, edit.client_id);
-    const style = styleForClient(ctx, { moodId: edit.mood_id, edit: edit.style_overrides, presetId: edit.style_id });
+    let overrides = edit.style_overrides ?? {};
+    const notes: string | null = edit.notes?.trim() || null;
+    if (notes && edit.mode === "auto") {
+      // "más motion graphics", "textos en 3D", "más elegante": se vuelve ajuste de estilo de este video
+      try {
+        const base = styleForClient(ctx, { moodId: edit.mood_id, edit: overrides, presetId: edit.style_id });
+        const asked = await moodFromDescription({ description: notes, currentStyle: base });
+        overrides = sanitizeOverrides(deepMerge(asked.overrides as Record<string, unknown>, overrides as Record<string, unknown>));
+        console.log(`   instrucciones: "${notes.slice(0, 80)}" → ${JSON.stringify(overrides)}`);
+      } catch (e) {
+        console.error("   no se pudieron convertir las instrucciones a estilo", e);
+      }
+    }
+    const style = styleForClient(ctx, { moodId: edit.mood_id, edit: overrides, presetId: edit.style_id });
     const tr = edit.transcript as StoredTranscript;
     const idea = edit.content_ideas ? { title: edit.content_ideas.title, hooks: edit.content_ideas.hooks } : null;
-    const direction = await directEdit({ words: tr.words, style, brand: ctx.brand.data, idea });
+    const direction = await directEdit({ words: tr.words, style, brand: ctx.brand.data, idea, notes });
     const edl = buildEdl({ words: tr.words, sourceDuration: tr.duration, style, direction });
     const cutSecs = tr.duration - edl.segments.reduce((a, s) => a + s.end - s.start, 0);
     console.log(
@@ -130,6 +160,7 @@ async function stepDirect() {
       .update({
         transcript: { ...tr, direction },
         edl,
+        style_overrides: overrides,
         style_id: edit.style_id ?? style.id,
         status: AUTO_RENDER ? "render_queued" : "review",
       })
@@ -152,7 +183,7 @@ async function stepRender() {
     const style = styleForClient(ctx, { moodId: edit.mood_id, edit: edit.style_overrides, presetId: edit.style_id });
     const { data: signed, error } = await db.storage
       .from("recordings")
-      .createSignedUrl(edit.recordings.storage_path, 60 * 60 * 6);
+      .createSignedUrl(edit.source_path ?? edit.recordings.storage_path, 60 * 60 * 6);
     if (error || !signed) throw new Error(`URL firmada: ${error?.message}`);
 
     const out = path.join(dir, `${edit.id}.mp4`);

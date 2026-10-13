@@ -19,12 +19,15 @@ export function EditReview(props: {
   moods: { id: string; name: string; style_overrides: StyleOverrides }[];
   initial: LabState;
   handle: string | null;
+  notes?: string | null;
   brandName?: string | null;
   canApprove: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<LabState>(props.initial);
   const [direction, setDirection] = useState<Direction | null>(props.direction);
+  const [notes, setNotes] = useState(props.notes ?? "");
+  const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState<"redirect" | "approve" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const onChange = useCallback((s: LabState) => setState(s), []);
@@ -36,11 +39,18 @@ export function EditReview(props: {
       const res = await fetch(`/api/edits/${props.editId}/${kind}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ styleId: state.presetId, moodId: state.moodId, overrides: state.overrides }),
+        body: JSON.stringify({ styleId: state.presetId, moodId: state.moodId, overrides: state.overrides, notes }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
-      if (kind === "redirect") setDirection(j.result.direction);
+      if (kind === "redirect") {
+        setDirection(j.result.direction);
+        if (j.result.overrides) {
+          // las instrucciones pueden cambiar el estilo: reiniciamos el laboratorio con el estilo nuevo
+          setState((s) => ({ ...s, overrides: j.result.overrides }));
+          setVersion((v) => v + 1);
+        }
+      }
       router.refresh();
     } catch (e) {
       setErr((e as Error).message);
@@ -51,6 +61,7 @@ export function EditReview(props: {
 
   return (
     <StyleLab
+      key={version}
       src={props.src}
       words={props.words}
       duration={props.duration}
@@ -61,10 +72,20 @@ export function EditReview(props: {
       brandAccent={props.brandAccent}
       clientOverrides={props.clientOverrides}
       moods={props.moods}
-      initial={props.initial}
+      initial={state}
       onChange={onChange}
     >
       <div className="card flex flex-wrap items-center gap-3 p-4">
+        <div className="w-full">
+          <div className="label mb-1">Instrucciones extra para la IA (opcional)</div>
+          <textarea
+            className="input"
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Ej: más motion graphics, textos en 3D, pon el precio en grande, quita la parte donde me trabé"
+          />
+        </div>
         <button className="btn btn-ghost" disabled={!!busy} onClick={() => call("redirect")}>
           {busy === "redirect" ? <Spinner /> : "✦"} Que la IA vuelva a dirigir con este estilo
         </button>
@@ -75,8 +96,8 @@ export function EditReview(props: {
         ) : null}
         {err ? <span className="text-xs text-bad">{err}</span> : null}
         <p className="w-full text-xs text-muted">
-          Los cambios de estilo se ven al instante. “Volver a dirigir” le pide a Claude que decida de nuevo cortes, zooms y
-          emojis pensando en el estilo nuevo.
+          Los cambios de estilo se ven al instante. “Volver a dirigir” le pide a la IA que decida de nuevo cortes, zooms,
+          emojis y textos animados con el estilo y las instrucciones que pusiste.
         </p>
       </div>
     </StyleLab>

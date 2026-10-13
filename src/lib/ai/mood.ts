@@ -19,6 +19,10 @@ const MoodSchema = z.object({
   colorGradeFilter: z.string().nullable().describe("CSS filter, ej: contrast(1.1) saturate(0.9)"),
   transition: z.enum(["none", "flash", "whip", "glitch", "fade"]).nullable(),
   motionLevel: z.enum(["none", "low", "medium", "high"]).nullable().describe("Cuántos textos animados y efectos (motion graphics)"),
+  calloutStyle: z
+    .enum(["sticker", "bar", "glow", "minimal", "3d"])
+    .nullable()
+    .describe("Look de los textos animados: sticker urbano, bar corporativo, glow brillante, minimal editorial, 3d letras con volumen que giran"),
   toneNotes: z.string().describe("Cómo cambia el tono de los guiones con este mood"),
 });
 
@@ -39,7 +43,7 @@ export async function moodFromDescription(opts: {
 Translate a client's plain-language description of how they want their videos to feel into concrete auto-editor settings.
 Only set the fields that should change (null = keep current). Fonts available: ${AVAILABLE_FONTS.join(", ")}.
 Presets: ${json(PRESETS.map((p) => ({ id: p.id, name: p.name, description: p.description })))}`,
-    user: `CURRENT STYLE: ${json({ id: opts.currentStyle.id, name: opts.currentStyle.name, captions: opts.currentStyle.captions, emojis: opts.currentStyle.emojis, transition: opts.currentStyle.transition })}
+    user: `CURRENT STYLE: ${json({ id: opts.currentStyle.id, name: opts.currentStyle.name, captions: opts.currentStyle.captions, emojis: opts.currentStyle.emojis, motion: opts.currentStyle.motion, transition: opts.currentStyle.transition })}
 CLIENT SAYS: "${opts.description}"
 REFERENCES: ${json(opts.references ?? [])}`,
   });
@@ -59,7 +63,11 @@ REFERENCES: ${json(opts.references ?? [])}`,
   if (m.sfxEnabled !== null) overrides.sfx = { enabled: m.sfxEnabled };
   if (m.colorGradeFilter) overrides.grade = { filter: m.colorGradeFilter };
   if (m.transition) overrides.transition = m.transition;
-  if (m.motionLevel) overrides.motion = { level: m.motionLevel };
+  if (m.motionLevel || m.calloutStyle)
+    overrides.motion = {
+      ...(m.motionLevel ? { level: m.motionLevel } : {}),
+      ...(m.calloutStyle ? { calloutStyle: m.calloutStyle } : {}),
+    };
   if (m.highlightColor) overrides.overlays = { progressColor: m.highlightColor };
 
   const presetId = m.presetId && PRESETS.some((p) => p.id === m.presetId) ? m.presetId : null;

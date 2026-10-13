@@ -61,7 +61,7 @@ export function sanitizeOverrides(input: unknown): StyleOverrides {
     }),
     motion: clean({
       level: oneOf(m.level, ["none", "low", "medium", "high"] as const),
-      calloutStyle: oneOf(m.calloutStyle, ["sticker", "bar", "glow", "minimal"] as const),
+      calloutStyle: oneOf(m.calloutStyle, ["sticker", "bar", "glow", "minimal", "3d"] as const),
       bursts: bool(m.bursts),
       lowerThird: bool(m.lowerThird),
       endCard: bool(m.endCard),

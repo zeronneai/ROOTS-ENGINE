@@ -17,7 +17,7 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
   if (!edit) notFound();
 
   const [{ data: src }, rendered] = await Promise.all([
-    db.storage.from("recordings").createSignedUrl(edit.recordings.storage_path, 60 * 60 * 3),
+    db.storage.from("recordings").createSignedUrl(edit.source_path ?? edit.recordings.storage_path, 60 * 60 * 3),
     edit.output_path ? db.storage.from("renders").createSignedUrl(edit.output_path, 60 * 60) : Promise.resolve({ data: null }),
   ]);
 
@@ -52,6 +52,7 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
           moods={moods}
           handle={client.instagram}
           brandName={client.name}
+          notes={edit.notes}
           initial={{ presetId: edit.style_id ?? client.edit_style_id, moodId: edit.mood_id ?? brand.active_mood_id, overrides: (edit.style_overrides ?? {}) as StyleOverrides }}
           canApprove={["review", "done", "failed"].includes(edit.status)}
         />

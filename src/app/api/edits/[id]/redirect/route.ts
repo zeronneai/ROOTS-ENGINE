@@ -3,6 +3,8 @@ import { getClientContext, styleForClient } from "@/server/engine";
 import { directEdit } from "@/lib/ai/direct-edit";
 import { buildEdl } from "@/lib/edl/build";
 import { sanitizeOverrides } from "@/lib/styles/sanitize";
+import { moodFromDescription } from "@/lib/ai/mood";
+import { deepMerge } from "@/lib/styles/merge";
 
 export const maxDuration = 120;
 
@@ -13,14 +15,23 @@ export const POST = editRoute(async ({ edit, body, db }) => {
   const ctx = await getClientContext(db, edit.client_id);
   const styleId = (body.styleId as string) ?? edit.style_id;
   const moodId = body.moodId === undefined ? edit.mood_id : (body.moodId as string | null);
-  const overrides = sanitizeOverrides(body.overrides ?? edit.style_overrides ?? {});
+  let overrides = sanitizeOverrides(body.overrides ?? edit.style_overrides ?? {});
+  const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 1000) || null : (edit.notes as string | null);
+  let changedStyle = false;
+  if (notes && notes !== edit.notes) {
+    // instrucciones nuevas: lo que pidan de look (más motion, 3D, elegante) se vuelve ajuste de este video
+    const base = styleForClient(ctx, { presetId: styleId, moodId, edit: overrides });
+    const asked = await moodFromDescription({ description: notes, currentStyle: base });
+    overrides = sanitizeOverrides(deepMerge(overrides as Record<string, unknown>, asked.overrides as Record<string, unknown>));
+    changedStyle = true;
+  }
   const style = styleForClient(ctx, { presetId: styleId, moodId, edit: overrides });
   const idea = edit.content_ideas ? { title: edit.content_ideas.title, hooks: edit.content_ideas.hooks } : null;
-  const direction = await directEdit({ words: edit.transcript.words, style, brand: ctx.brand.data, idea });
+  const direction = await directEdit({ words: edit.transcript.words, style, brand: ctx.brand.data, idea, notes });
   const edl = buildEdl({ words: edit.transcript.words, sourceDuration: edit.transcript.duration, style, direction });
   await db
     .from("edits")
-    .update({ transcript: { ...edit.transcript, direction }, edl, style_id: styleId, mood_id: moodId, style_overrides: overrides })
+    .update({ transcript: { ...edit.transcript, direction }, edl, style_id: styleId, mood_id: moodId, style_overrides: overrides, notes })
     .eq("id", edit.id);
-  return { edl, direction };
+  return { edl, direction, overrides: changedStyle ? overrides : null };
 });

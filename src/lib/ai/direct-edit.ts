@@ -29,6 +29,8 @@ export async function directEdit(opts: {
   style: EditStyle;
   brand: Partial<BrandBrain>;
   idea?: { title: string; hooks: string[] } | null;
+  /** instrucciones extra de quien subió el video ("pon el precio en grande", "más motion graphics") */
+  notes?: string | null;
 }): Promise<Direction> {
   const { words, style } = opts;
   if (!words.length) return heuristicDirection(words, style);
@@ -58,6 +60,7 @@ Recorded mistakes are common: when the speaker restarts a sentence, cut the fail
 Use only indexes that exist.`,
       user: `BRAND: ${json({ name: opts.brand.businessName, tone: opts.brand.voice?.tone, avoid: opts.brand.avoid })}
 IDEA: ${json(opts.idea ?? null)}
+${opts.notes ? `EXTRA INSTRUCTIONS FROM THE CLIENT (follow them with the tools you have: cuts, emphasis, zooms, emojis, callouts, hook title, cta; you may go over the suggested amounts if they ask for more): ${json(opts.notes)}` : ""}
 TRANSCRIPT (${duration.toFixed(1)}s): ${numbered}`,
     });
 

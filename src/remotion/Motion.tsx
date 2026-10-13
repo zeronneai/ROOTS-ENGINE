@@ -141,6 +141,47 @@ export const Callout: React.FC<{ text: string; kind: "keyword" | "number"; style
     );
   }
 
+  if (variant === "3d") {
+    // letras con volumen: extrusión con capas de sombra, entran girando en perspectiva
+    const p = spring({ frame, fps, config: { damping: 11, stiffness: 120 } });
+    const sway = Math.sin(frame / (fps * 0.45)) * 7;
+    const rotY = interpolate(p, [0, 1], [-75, 0]) + sway * Math.min(1, frame / (fps * 0.6));
+    const rotX = interpolate(p, [0, 1], [35, 8]);
+    const depth = Math.round(14 * k);
+    const shade = "rgba(0,0,0,0.55)";
+    const extrude = Array.from({ length: depth }, (_, i) => `${(i + 1) * 0.6}px ${(i + 1)}px 0 ${i < depth - 1 ? accent : shade}`).join(", ");
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", perspective: 900 * k }}>
+        <div style={{ position: "absolute", left: 0, right: 0, top, display: "flex", justifyContent: "center" }}>
+          <div
+            style={{
+              transform: `rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${interpolate(p, [0, 1], [0.6, 1]) * exit})`,
+              transformStyle: "preserve-3d",
+              opacity: Math.min(1, p * 1.5) * exit,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: `"${style.overlays.hookTitleFont}", sans-serif`,
+                fontWeight: 900,
+                fontSize: fit(110 * k, 860 * k),
+                maxWidth: 900 * k,
+                lineHeight: 1,
+                textTransform: "uppercase",
+                color: "#FFFFFF",
+                WebkitTextStroke: `${3 * k}px ${accent}`,
+                textShadow: `${extrude}, 0 ${depth * 2.4}px ${depth * 2.2}px rgba(0,0,0,0.6)`,
+                ...wrap,
+              }}
+            >
+              {shown}
+            </div>
+          </div>
+        </div>
+      </AbsoluteFill>
+    );
+  }
+
   // minimal (editorial)
   const line = interpolate(frame, [0, fps * 0.5], [0, 1], { extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) });
   const txt = interpolate(frame, [fps * 0.2, fps * 0.6], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
