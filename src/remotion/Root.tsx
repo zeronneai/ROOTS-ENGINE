@@ -4,6 +4,7 @@ import { AutoEdit, calculateAutoEditMetadata, type AutoEditProps } from "./AutoE
 import { buildEdl, heuristicDirection } from "../lib/edl/build";
 import { getPreset } from "../lib/styles/presets";
 import { demoWords, DEMO_DURATION } from "./demo";
+import { Promo, PROMO } from "./promo/Promo";
 
 const style = getPreset("street-fade");
 const words = demoWords();
@@ -22,6 +23,7 @@ const defaultProps: AutoEditProps = {
 };
 
 export const RemotionRoot: React.FC = () => (
+  <>
   <Composition
     id="AutoEdit"
     component={AutoEdit}
@@ -32,4 +34,6 @@ export const RemotionRoot: React.FC = () => (
     width={1080}
     height={1920}
   />
+  <Composition id="Promo" component={Promo} {...PROMO} />
+  </>
 );
