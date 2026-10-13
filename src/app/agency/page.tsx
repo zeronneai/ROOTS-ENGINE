@@ -28,7 +28,7 @@ export default async function AgencyHome() {
 
   return (
     <>
-      <TopBar right={<span className="text-muted">{viewer.email}</span>} />
+      <TopBar right={<a href="/cuenta" className="text-muted hover:text-ink">{viewer.email} · Mi cuenta</a>} />
       <main className="mx-auto max-w-7xl px-5 py-10">
         <PageTitle kicker="Agencia" title="Clientes">
           <Link href="/agency/nuevo" className="btn btn-primary">

@@ -25,7 +25,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
                 <SubmitButton className="btn btn-ghost !py-1.5 text-xs">👁 Ver como cliente</SubmitButton>
               </form>
             ) : null}
-            <span className="hidden text-muted lg:inline">{viewer.email}</span>
+            <a href="/cuenta" className="hidden text-muted hover:text-ink lg:inline">{viewer.email}</a>
             {/* en celular: el cliente arriba a la derecha */}
             <span className="max-w-[45vw] truncate text-right text-sm font-semibold lg:hidden">{client.name}</span>
           </>

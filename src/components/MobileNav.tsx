@@ -36,6 +36,7 @@ export function MobileNav({ clientId, isAgency, badge = 0, previewing = false }:
     { href: `${base}/competencia`, label: "Competencia" },
     { href: `${base}/estilo`, label: "Estilo de edición" },
     ...(isAgency ? [{ href: `${base}/ajustes`, label: "Ajustes" }, { href: "/agency", label: "← Todos los clientes" }] : []),
+    { href: "/cuenta", label: "Mi cuenta y contraseña" },
   ];
   const isActive = (href: string) => (href === base ? path === base : path.startsWith(href));
   const moreActive = more.some((m) => m.href !== "/agency" && isActive(m.href));
