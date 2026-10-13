@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { Logo } from "@/components/Logo";
 import { submitIntakeAction } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function IntakePage({ params, searchParams }: { params: Pro
             <F l="¿Qué quieres que haga la gente después de ver tus videos?"><input name="cta" className="input" placeholder="Llamar, mandar WhatsApp, visitarte, comprar en línea..." /></F>
             <F l="Colores, logo o estilo visual"><input name="colores" className="input" /></F>
             <F l="¿Algo más que debamos saber?"><textarea name="extra" rows={3} className="input" /></F>
-            <button className="btn btn-primary w-full">Enviar</button>
+            <SubmitButton className="btn btn-primary w-full">Enviar</SubmitButton>
           </form>
         </>
       )}

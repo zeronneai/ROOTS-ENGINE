@@ -4,6 +4,7 @@ import { PageTitle } from "@/components/Shell";
 import { NICHES } from "@/lib/styles/presets";
 import { PLAN_TIERS } from "@/lib/types";
 import { addMemberAction, updateClientAction } from "@/app/actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export default async function AjustesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -42,7 +43,7 @@ export default async function AjustesPage({ params }: { params: Promise<{ id: st
               <option value="onboarding">Onboarding</option><option value="active">Activo</option><option value="paused">Pausado</option>
             </select>
           </F>
-          <div className="sm:col-span-2"><button className="btn btn-primary">Guardar</button></div>
+          <div className="sm:col-span-2"><SubmitButton className="btn btn-primary">Guardar</SubmitButton></div>
         </form>
         <aside className="card space-y-3 p-5">
           <div className="font-semibold">Acceso del cliente</div>
@@ -52,7 +53,7 @@ export default async function AjustesPage({ params }: { params: Promise<{ id: st
           </ul>
           <form action={addMemberAction.bind(null, id)} className="space-y-2">
             <input name="email" type="email" required placeholder="correo del cliente" className="input" />
-            <button className="btn btn-ghost w-full">Dar acceso</button>
+            <SubmitButton className="btn btn-ghost w-full">Dar acceso</SubmitButton>
           </form>
           <p className="text-xs text-muted">Entra en /login con ese correo y le llega un link. Ve solo su propio portal.</p>
         </aside>

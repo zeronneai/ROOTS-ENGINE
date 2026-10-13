@@ -3,6 +3,7 @@ import { loadClient } from "@/server/load";
 import { Empty, PageTitle } from "@/components/Shell";
 import { UploadRecording } from "@/components/UploadRecording";
 import { retryEditAction } from "@/app/actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 const EDIT_STATUS: Record<string, { l: string; c: string }> = {
   queued: { l: "En fila", c: "text-muted" },
@@ -67,7 +68,7 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
                   ) : null}
                   {outputs[k] ? <a href={outputs[k]!} className="btn btn-primary">Descargar</a> : null}
                   {e.status === "failed" ? (
-                    <form action={retryEditAction.bind(null, id, e.id)}><button className="btn btn-ghost">Reintentar</button></form>
+                    <form action={retryEditAction.bind(null, id, e.id)}><SubmitButton className="btn btn-ghost">Reintentar</SubmitButton></form>
                   ) : null}
                 </div>
               );

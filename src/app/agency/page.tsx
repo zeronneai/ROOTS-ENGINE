@@ -7,6 +7,7 @@ import { NICHES } from "@/lib/styles/presets";
 import { PLAN_TIERS, type ClientRow } from "@/lib/types";
 import { Empty, NoBackend, PageTitle, TopBar } from "@/components/Shell";
 import { addAgencyMemberAction } from "../actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export default async function AgencyHome() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return <NoBackend />;
@@ -59,7 +60,7 @@ export default async function AgencyHome() {
           <div className="label">Dar acceso a alguien del equipo</div>
           <form action={addAgencyMemberAction} className="mt-3 flex gap-2">
             <input name="email" type="email" required placeholder="correo@purpleroots.agency" className="input" />
-            <button className="btn btn-ghost">Agregar</button>
+            <SubmitButton className="btn btn-ghost">Agregar</SubmitButton>
           </form>
         </section>
       </main>

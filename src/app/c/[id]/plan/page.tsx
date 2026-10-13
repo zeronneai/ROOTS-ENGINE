@@ -3,6 +3,8 @@ import { loadClient } from "@/server/load";
 import { Empty, PageTitle } from "@/components/Shell";
 import { PlanGenerator } from "@/components/PlanGenerator";
 import { setIdeaStatusAction } from "@/app/actions";
+import { PrintButton } from "@/components/PrintButton";
+import { SubmitButton } from "@/components/SubmitButton";
 
 const STATUS: Record<string, { l: string; c: string }> = {
   idea: { l: "Idea", c: "" },
@@ -37,7 +39,9 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <PageTitle kicker="03 · Plan semanal" title={current ? `Semana del ${current.week_start}` : "Plan semanal"} />
+      <PageTitle kicker={`03 · Plan semanal · ${client.name}`} title={current ? `Semana del ${current.week_start}` : "Plan semanal"}>
+        {ideas.length ? <PrintButton /> : null}
+      </PageTitle>
 
       <div className="grid gap-8 xl:grid-cols-[1fr_300px]">
         <section className="space-y-4">
@@ -48,7 +52,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
             </Empty>
           ) : (
             ideas.map((i) => (
-              <article key={i.id} className="card p-5">
+              <article key={i.id} className="card break-inside-avoid p-5">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="display text-lavender">{dayName(i.publish_date)}</span>
                   <span className="chip">{i.format}</span>
@@ -90,16 +94,16 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
 
                 {isAgency && i.reasoning ? <p className="mt-4 text-xs text-muted">Por qué: {i.reasoning}</p> : null}
 
-                <div className="mt-5 flex flex-wrap gap-2">
+                <div className="mt-5 flex flex-wrap gap-2 print:hidden">
                   <Link href={`/c/${id}/videos?idea=${i.id}`} className="btn btn-primary">Subir grabación</Link>
                   {i.status === "idea" ? (
-                    <form action={setIdeaStatusAction.bind(null, id, i.id, "approved")}><button className="btn btn-ghost">Aprobar</button></form>
+                    <form action={setIdeaStatusAction.bind(null, id, i.id, "approved")}><SubmitButton className="btn btn-ghost">Aprobar</SubmitButton></form>
                   ) : null}
                   {["edited", "recorded"].includes(i.status) ? (
-                    <form action={setIdeaStatusAction.bind(null, id, i.id, "posted")}><button className="btn btn-ghost">Ya se publicó</button></form>
+                    <form action={setIdeaStatusAction.bind(null, id, i.id, "posted")}><SubmitButton className="btn btn-ghost">Ya se publicó</SubmitButton></form>
                   ) : null}
                   {i.status !== "skipped" ? (
-                    <form action={setIdeaStatusAction.bind(null, id, i.id, "skipped")}><button className="btn btn-ghost">Saltar</button></form>
+                    <form action={setIdeaStatusAction.bind(null, id, i.id, "skipped")}><SubmitButton className="btn btn-ghost">Saltar</SubmitButton></form>
                   ) : null}
                 </div>
               </article>

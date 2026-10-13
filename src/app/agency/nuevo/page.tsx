@@ -5,6 +5,7 @@ import { NICHES } from "@/lib/styles/presets";
 import { PLAN_TIERS } from "@/lib/types";
 import { PageTitle, TopBar } from "@/components/Shell";
 import { createClientAction } from "../../actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export default async function NewClient() {
   await requireAgency();
@@ -56,7 +57,7 @@ export default async function NewClient() {
           <Field label="Correo del cliente para darle acceso (opcional)">
             <input name="client_email" type="email" className="input" />
           </Field>
-          <button className="btn btn-primary">Crear cliente</button>
+          <SubmitButton className="btn btn-primary">Crear cliente</SubmitButton>
         </form>
       </main>
     </>

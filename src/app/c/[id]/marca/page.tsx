@@ -3,6 +3,7 @@ import { ApiButton } from "@/components/ApiButton";
 import { Empty, PageTitle } from "@/components/Shell";
 import { addBrandInputAction, deleteBrandInputAction } from "@/app/actions";
 import type { BrandBrain } from "@/lib/types";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export default async function MarcaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -90,7 +91,7 @@ export default async function MarcaPage({ params }: { params: Promise<{ id: stri
                 {moods.map((m) => <option key={m.id} value={m.id}>Solo para el mood: {m.name}</option>)}
               </select>
             ) : null}
-            <button className="btn btn-primary w-full">Agregar</button>
+            <SubmitButton className="btn btn-primary w-full">Agregar</SubmitButton>
           </form>
 
           <div className="card p-5">
@@ -104,7 +105,7 @@ export default async function MarcaPage({ params }: { params: Promise<{ id: stri
                     {!i.synthesized ? <span className="chip text-warn">nuevo</span> : null}
                     {isAgency ? (
                       <form action={deleteBrandInputAction.bind(null, id, i.id)} className="ml-auto">
-                        <button className="text-xs text-muted hover:text-bad">borrar</button>
+                        <SubmitButton className="text-xs text-muted hover:text-bad">borrar</SubmitButton>
                       </form>
                     ) : null}
                   </div>

@@ -3,6 +3,7 @@ import { ApiButton } from "@/components/ApiButton";
 import { Empty, PageTitle } from "@/components/Shell";
 import { addCompetitorsAction, removeCompetitorAction } from "@/app/actions";
 import type { PostAnalysis } from "@/lib/types";
+import { SubmitButton } from "@/components/SubmitButton";
 
 const fmt = (n: number | null) =>
   n == null ? "n/d" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
@@ -124,7 +125,7 @@ export default async function CompetenciaPage({ params }: { params: Promise<{ id
                   <span className="ml-auto text-xs text-muted">{c.median_views ? `med ${fmt(Number(c.median_views))}` : ""}</span>
                   {isAgency ? (
                     <form action={removeCompetitorAction.bind(null, id, c.id)}>
-                      <button className="text-xs text-muted hover:text-bad">✕</button>
+                      <SubmitButton className="text-xs text-muted hover:text-bad">✕</SubmitButton>
                     </form>
                   ) : null}
                   {c.note ? <p className="w-full text-xs text-muted">{c.note}</p> : null}
@@ -140,7 +141,7 @@ export default async function CompetenciaPage({ params }: { params: Promise<{ id
               <option value="tiktok">TikTok</option>
             </select>
             <textarea name="handles" rows={3} className="input" placeholder="@cuenta1 @cuenta2" />
-            <button className="btn btn-primary w-full">{isAgency ? "Agregar" : "Sugerir"}</button>
+            <SubmitButton className="btn btn-primary w-full">{isAgency ? "Agregar" : "Sugerir"}</SubmitButton>
           </form>
         </aside>
       </div>

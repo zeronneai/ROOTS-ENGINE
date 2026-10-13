@@ -151,3 +151,11 @@ body {
   main { padding: 0 !important; }
   .break-inside-avoid { break-inside: avoid; }
 }
+
+/* feedback al dar clic */
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.btn:disabled {
+  cursor: progress;
+}

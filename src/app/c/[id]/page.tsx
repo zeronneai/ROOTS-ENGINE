@@ -6,6 +6,7 @@ import { PageTitle } from "@/components/Shell";
 import { addBrandInputAction } from "@/app/actions";
 import { EngineRunner } from "@/components/EngineRunner";
 import { CopyLink } from "@/components/CopyLink";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export default async function ClientHome({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -152,7 +153,7 @@ export default async function ClientHome({ params }: { params: Promise<{ id: str
                 <div className="text-sm">{q}</div>
                 <div className="flex gap-2">
                   <input name="content" className="input" placeholder="Tu respuesta" />
-                  <button className="btn btn-ghost">Guardar</button>
+                  <SubmitButton className="btn btn-ghost">Guardar</SubmitButton>
                 </div>
               </form>
             ))}

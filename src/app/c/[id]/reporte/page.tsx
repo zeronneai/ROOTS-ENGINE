@@ -18,6 +18,15 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
     );
 
   const r = row.data as Report;
+  const { data: plan } = await db
+    .from("content_plans")
+    .select("week_start, content_ideas(title, format, hooks, shot_list, cta, publish_date, position)")
+    .eq("client_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  type PlanIdea = { title: string; format: string; hooks: string[]; shot_list: string[]; cta: string; publish_date: string; position: number };
+  const ideas = ((plan?.content_ideas ?? []) as PlanIdea[]).sort((a, b) => (a.publish_date ?? "").localeCompare(b.publish_date ?? "") || a.position - b.position);
   const date = new Date(row.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
 
   return (
@@ -159,6 +168,27 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
           ))}
         </ol>
       </Section>
+      {ideas.length ? (
+        <Section n="10" title={`Qué grabar: semana del ${plan?.week_start}`}>
+          <div className="space-y-4">
+            {ideas.map((i, k) => (
+              <div key={k} className="break-inside-avoid rounded-xl border border-line p-4 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">{i.title}</span>
+                  <span className="chip">{i.format}</span>
+                </div>
+                <p className="mt-2"><span className="text-lavender">Hook:</span> “{i.hooks?.[0]}”</p>
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted">
+                  {(i.shot_list ?? []).map((s, j) => <li key={j}>{s}</li>)}
+                </ol>
+                <p className="mt-2"><span className="text-lavender">CTA:</span> {i.cta}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted">Guiones completos y los 3 hooks de cada idea en Plan semanal.</p>
+        </Section>
+      ) : null}
+
       {r.digitalPresence ? (
         <Section n="✦" title={`Bonus: dónde está fallando su presencia digital · ${Math.round(r.digitalPresence.score)}/100`}>
           <div className="space-y-3">
