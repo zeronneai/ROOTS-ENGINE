@@ -6,6 +6,7 @@ import { Spinner } from "./ApiButton";
 import type { Direction } from "@/lib/edl/build";
 import type { Word } from "@/lib/edl/types";
 import type { StyleOverrides } from "@/lib/styles/types";
+import { MusicPicker, type MusicChoice } from "./music/MusicPicker";
 
 export function EditReview(props: {
   editId: string;
@@ -22,6 +23,9 @@ export function EditReview(props: {
   notes?: string | null;
   assetUrls?: Record<string, string>;
   isAgency?: boolean;
+  clientId?: string;
+  tracks?: { id: string; title: string; url: string | null; path: string; own: boolean }[];
+  music?: MusicChoice;
   brandName?: string | null;
   canApprove: boolean;
 }) {
@@ -32,6 +36,15 @@ export function EditReview(props: {
   const [version, setVersion] = useState(0);
   const [assetUrls, setAssetUrls] = useState(props.assetUrls ?? {});
   const [summary, setSummary] = useState<string | null>(null);
+  const [tracks, setTracks] = useState(props.tracks ?? []);
+  const [music, setMusic] = useState<MusicChoice>(props.music ?? { mode: "auto", id: null });
+  const [musicVolume, setMusicVolume] = useState<number>((props.initial.overrides.music?.volume as number | undefined) ?? 0.32);
+  // la vista previa usa la canción elegida (o la que escogió la IA)
+  const chosen = music.mode === "track" ? tracks.find((t) => t.id === music.id) : null;
+  const previewMusic =
+    music.mode === "none" ? null : chosen ? { path: chosen.path, title: chosen.title } : (direction?.music ?? null);
+  const previewDirection = direction ? { ...direction, music: previewMusic } : direction;
+  const musicUrl = previewMusic ? tracks.find((t) => t.path === previewMusic.path)?.url ?? null : null;
   const [busy, setBusy] = useState<"redirect" | "approve" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const onChange = useCallback((s: LabState) => setState(s), []);
@@ -44,7 +57,14 @@ export function EditReview(props: {
       const res = await fetch(`/api/edits/${props.editId}/${kind}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ styleId: state.presetId, moodId: state.moodId, overrides: state.overrides, notes }),
+        body: JSON.stringify({
+          styleId: state.presetId,
+          moodId: state.moodId,
+          overrides: { ...state.overrides, music: { ...(state.overrides.music ?? {}), volume: musicVolume } },
+          notes,
+          musicMode: music.mode,
+          musicId: music.id,
+        }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
@@ -83,7 +103,9 @@ export function EditReview(props: {
       src={props.src}
       words={props.words}
       duration={props.duration}
-      direction={direction}
+      direction={previewDirection}
+      musicUrl={musicUrl}
+      musicVolume={musicVolume}
       handle={props.handle}
       brandName={props.brandName}
       assetUrls={assetUrls}
@@ -95,6 +117,35 @@ export function EditReview(props: {
       onChange={onChange}
     >
       <div className="card flex flex-wrap items-center gap-3 p-4">
+        {props.clientId ? (
+          <div className="w-full">
+            <div className="label mb-1">Música</div>
+            <MusicPicker
+              clientId={props.clientId}
+              tracks={tracks}
+              value={music}
+              onChange={(v, added) => {
+                if (added) setTracks((t) => [{ ...added, url: added.url ?? null, path: added.path ?? "", own: true }, ...t]);
+                setMusic(v);
+              }}
+            />
+            {music.mode === "auto" && direction?.music ? <p className="mt-1 text-xs text-muted">La IA escogió: {direction.music.title}</p> : null}
+            {previewMusic ? (
+              <label className="mt-2 flex items-center gap-3 text-xs text-muted">
+                Volumen
+                <input
+                  type="range"
+                  min={0.05}
+                  max={0.8}
+                  step={0.05}
+                  value={musicVolume}
+                  onChange={(e) => setMusicVolume(Number(e.target.value))}
+                  className="flex-1 accent-[#4f4789]"
+                />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
         <div className="w-full">
           <div className="label mb-1">Instrucciones extra para la IA (opcional)</div>
           <textarea

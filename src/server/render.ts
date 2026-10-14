@@ -2,6 +2,7 @@ import path from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import type { AutoEditProps } from "../remotion/AutoEdit";
+import type { TourEditProps } from "../remotion/TourEdit";
 
 let bundleLocation: Promise<string> | null = null;
 
@@ -20,12 +21,17 @@ function getBundle() {
  * Renderiza un AutoEdit a MP4.
  * `props.src` debe ser una URL http(s) (ej. URL firmada de Supabase) o una ruta de staticFile.
  */
-export async function renderAutoEdit(props: AutoEditProps, outputLocation: string, onProgress?: (p: number) => void) {
+export async function renderAutoEdit(
+  props: AutoEditProps | TourEditProps,
+  outputLocation: string,
+  onProgress?: (p: number) => void,
+  compositionId: "AutoEdit" | "Tour" = "AutoEdit",
+) {
   const serveUrl = await getBundle();
   const inputProps = props as unknown as Record<string, unknown>;
   const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE || null;
 
-  const composition = await selectComposition({ serveUrl, id: "AutoEdit", inputProps, browserExecutable });
+  const composition = await selectComposition({ serveUrl, id: compositionId, inputProps, browserExecutable });
 
   await renderMedia({
     composition,

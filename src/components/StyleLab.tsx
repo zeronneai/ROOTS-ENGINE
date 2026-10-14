@@ -28,6 +28,8 @@ export function StyleLab(props: {
   handle?: string | null;
   brandName?: string | null;
   assetUrls?: Record<string, string>;
+  musicUrl?: string | null;
+  musicVolume?: number;
   niche?: string | null;
   brandAccent?: string | null;
   clientOverrides?: StyleOverrides | null;
@@ -84,6 +86,8 @@ export function StyleLab(props: {
           handle={props.handle}
           brandName={props.brandName}
           assetUrls={props.assetUrls}
+          musicUrl={props.musicUrl}
+          musicVolume={props.musicVolume}
         />
         <p className="mt-3 text-center text-xs text-muted">
           Estilo activo: <span className="text-lavender">{style.name}</span>

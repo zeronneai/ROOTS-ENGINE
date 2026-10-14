@@ -22,7 +22,7 @@ function size(file: string) {
  * (el del primer clip: vertical u horizontal), 30 fps y audio AAC, para que el editor los vea como un solo video.
  * Comprimido para que quepa en el almacenamiento (aprox. 35 MB por minuto).
  */
-export function mergeClips(files: string[], dir: string): string {
+export function mergeClips(files: string[], dir: string): { file: string; clips: { start: number; end: number }[] } {
   const first = size(files[0]);
   const vertical = first.h >= first.w;
   const [W, H] = vertical ? [1080, 1920] : [1920, 1080];
@@ -49,5 +49,13 @@ export function mergeClips(files: string[], dir: string): string {
   writeFileSync(list, parts.map((p) => `file '${p.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`).join("\n"));
   const merged = path.join(dir, "merged.mp4");
   execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", list, "-c", "copy", "-movflags", "+faststart", merged]);
-  return merged;
+  // dónde empieza y termina cada clip dentro del video unido
+  const clips: { start: number; end: number }[] = [];
+  let t = 0;
+  for (const p of parts) {
+    const d = Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", p]).toString().trim()) || 0;
+    clips.push({ start: +t.toFixed(3), end: +(t + d).toFixed(3) });
+    t += d;
+  }
+  return { file: merged, clips };
 }

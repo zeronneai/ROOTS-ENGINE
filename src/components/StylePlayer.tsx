@@ -17,14 +17,17 @@ export function StylePlayer(props: {
   handle?: string | null;
   brandName?: string | null;
   assetUrls?: Record<string, string>;
+  musicUrl?: string | null;
+  musicVolume?: number;
   className?: string;
 }) {
   const { src, words, duration, style, direction, hookTitle, handle } = props;
 
   const edl = useMemo(() => {
     const dir = direction ?? heuristicDirection(words, style, hookTitle ?? null);
-    return buildEdl({ words, sourceDuration: duration, style, direction: dir });
-  }, [words, duration, style, direction, hookTitle]);
+    const e = buildEdl({ words, sourceDuration: duration, style, direction: dir });
+    return e.music && props.musicVolume != null ? { ...e, music: { ...e.music, volume: props.musicVolume } } : e;
+  }, [words, duration, style, direction, hookTitle, props.musicVolume]);
 
   const frames = Math.max(1, Math.ceil(makeTimeMap(edl.segments).total * edl.fps));
 
@@ -32,7 +35,7 @@ export function StylePlayer(props: {
     <div className={props.className} style={{ aspectRatio: "9 / 16" }}>
       <Player
         component={AutoEdit}
-        inputProps={{ src, edl, style, brand: { handle: handle ?? undefined, name: props.brandName ?? undefined }, assetUrls: props.assetUrls }}
+        inputProps={{ src, edl, style, brand: { handle: handle ?? undefined, name: props.brandName ?? undefined }, assetUrls: props.assetUrls, musicUrl: props.musicUrl }}
         durationInFrames={frames}
         fps={edl.fps}
         compositionWidth={edl.width}

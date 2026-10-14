@@ -20,7 +20,7 @@ export async function structured<S extends z.ZodType>(opts: {
   /** qué es, para el registro de costos */
   label?: string;
   /** URLs de imágenes para que Claude las vea (fotos de producto, referencias) */
-  images?: string[];
+  images?: (string | { data: string; mediaType: "image/jpeg" | "image/png" })[];
   maxTokens?: number;
   model?: string;
 }): Promise<z.infer<S>> {
@@ -33,7 +33,11 @@ export async function structured<S extends z.ZodType>(opts: {
         role: "user",
         content: opts.images?.length
           ? [
-              ...opts.images.map((url) => ({ type: "image" as const, source: { type: "url" as const, url } })),
+              ...opts.images.map((im) =>
+                typeof im === "string"
+                  ? { type: "image" as const, source: { type: "url" as const, url: im } }
+                  : { type: "image" as const, source: { type: "base64" as const, media_type: im.mediaType, data: im.data } },
+              ),
               { type: "text" as const, text: opts.user },
             ]
           : opts.user,

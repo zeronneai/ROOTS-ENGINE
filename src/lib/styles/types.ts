@@ -97,6 +97,13 @@ export const EditStyleSchema = z.object({
     endCard: z.boolean(), // cierre con llamado a la acción y @usuario
   }),
 
+  /** Música de fondo: volumen base y cuánto baja cuando la persona habla (0.3 = baja al 30%) */
+  music: z.object({
+    enabled: z.boolean(),
+    volume: z.number(), // 0..1
+    duck: z.number(), // 0..1
+  }),
+
   transition: Transition,
 });
 

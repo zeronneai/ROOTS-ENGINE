@@ -6,10 +6,11 @@ import { UploadRecording } from "@/components/UploadRecording";
 import { retryEditAction } from "@/app/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LiveEdits } from "@/components/LiveEdits";
+import { loadTracks } from "@/lib/music";
 
 const EDIT_STATUS: Record<string, { l: string; c: string }> = {
   queued: { l: "En fila", c: "text-muted" },
-  transcribing: { l: "Transcribiendo", c: "text-warn" },
+  transcribing: { l: "Preparando", c: "text-warn" },
   directing: { l: "La IA está editando", c: "text-warn" },
   directing_claimed: { l: "La IA está editando", c: "text-warn" },
   review: { l: "Listo para revisar", c: "text-lavender" },
@@ -37,6 +38,15 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
         ? ["agency", "auto"]
         : [];
 
+  const trackOpts = await Promise.all(
+    (await loadTracks(db, id)).map(async (t) => ({
+      id: t.id,
+      title: t.title,
+      own: !!t.client_id,
+      url: (await db.storage.from("brand").createSignedUrl(t.path, 60 * 60 * 2)).data?.signedUrl ?? null,
+    })),
+  );
+
   const outputs = await Promise.all(
     (edits ?? []).map(async (e) =>
       e.status === "done" && e.output_path
@@ -61,7 +71,7 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold">{e.content_ideas?.title ?? e.recordings?.original_name}</div>
                     <div className="text-xs text-muted">
-                      {fmtDateTime(e.created_at)} · {e.mode === "auto" ? "Auto-edición" : "Equipo PRA"}
+                      {fmtDateTime(e.created_at)} · {e.mode === "auto" ? (e.kind === "tour" ? "Recorrido" : "Auto-edición") : "Equipo PRA"}
                     </div>
                     {e.error ? <div className="mt-1 text-xs text-bad">{e.error}</div> : null}
                   </div>
@@ -80,7 +90,14 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
         </section>
         <aside>
           {modes.length ? (
-            <UploadRecording clientId={id} ideas={ideas ?? []} defaultIdea={idea} modes={modes} />
+            <UploadRecording
+              clientId={id}
+              ideas={ideas ?? []}
+              defaultIdea={idea}
+              modes={modes}
+              tracks={trackOpts}
+              defaultKind={client.niche === "inmobiliaria" ? "tour" : "talk"}
+            />
           ) : (
             <div className="card p-5 text-sm text-muted">
               Tu plan incluye investigación, ideas y guiones. Para que editemos tus videos, pásate a <b className="text-ink">Roots Auto</b> o <b className="text-ink">Roots Edit</b>.

@@ -26,6 +26,8 @@ export type AutoEditProps = {
   brand?: { name?: string; handle?: string };
   /** ruta en Storage → URL firmada de las imágenes del cliente */
   assetUrls?: Record<string, string>;
+  /** URL firmada de la canción de fondo */
+  musicUrl?: string | null;
 };
 
 export const calculateAutoEditMetadata: CalculateMetadataFunction<AutoEditProps> = ({ props }) => {
@@ -40,7 +42,7 @@ export const calculateAutoEditMetadata: CalculateMetadataFunction<AutoEditProps>
 
 type Cut = { at: number; kind: EditStyle["transition"] };
 
-export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, assetUrls }) => {
+export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, assetUrls, musicUrl }) => {
   const frame = useCurrentFrame();
   const { fps, width, durationInFrames } = useVideoConfig();
   const t = frame / fps;
@@ -302,6 +304,9 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, asse
         </div>
       ) : null}
 
+      {/* ── música: baja cuando hay voz y sube en las pausas ── */}
+      {musicUrl && edl.music ? <Music src={musicUrl} words={words} volume={edl.music.volume} duck={edl.music.duck} /> : null}
+
       {/* ── sonidos ── */}
       {sfx.map((s, i) => (
         <Sequence key={`s${i}`} from={Math.round(s.at * fps)} durationInFrames={Math.round(fps * 1)}>
@@ -414,3 +419,40 @@ const Grain: React.FC<{ amount: number; seed: number }> = ({ amount, seed }) => 
     }}
   />
 );
+
+/** Música de fondo con "ducking": cuando la persona habla, la música baja; en las pausas sube. */
+const Music: React.FC<{ src: string; words: OutWord[]; volume: number; duck: number }> = ({ src, words, volume, duck }) => {
+  const { fps, durationInFrames } = useVideoConfig();
+  // tramos con voz (se juntan palabras separadas por menos de 0.45 s)
+  const speech = useMemo(() => {
+    const out: { start: number; end: number }[] = [];
+    for (const w of words) {
+      const last = out[out.length - 1];
+      if (last && w.start - last.end < 0.45) last.end = w.end;
+      else out.push({ start: w.start, end: w.end });
+    }
+    return out;
+  }, [words]);
+  const level = (t: number) => {
+    // 1 = sin voz, duck = con voz, con rampas de 0.2 s para que no brinque
+    let v = 1;
+    for (const s of speech) {
+      if (t < s.start - 0.2 || t > s.end + 0.3) continue;
+      const inR = interpolate(t, [s.start - 0.2, s.start], [1, duck], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+      const outR = interpolate(t, [s.end, s.end + 0.3], [duck, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+      v = Math.min(v, Math.max(inR, outR));
+    }
+    return v;
+  };
+  return (
+    <Audio
+      src={src}
+      loop
+      volume={(f) =>
+        volume *
+        level(f / fps) *
+        interpolate(f, [0, fps * 0.6, durationInFrames - fps * 1.5, durationInFrames], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+      }
+    />
+  );
+};

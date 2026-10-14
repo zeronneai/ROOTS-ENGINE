@@ -30,6 +30,7 @@ export function sanitizeOverrides(input: unknown): StyleOverrides {
   const z = isObj(input.zoom) ? input.zoom : {};
   const o = isObj(input.overlays) ? input.overlays : {};
   const m = isObj(input.motion) ? input.motion : {};
+  const mu = isObj(input.music) ? input.music : {};
 
   const out: StyleOverrides = {
     energy: num(input.energy, -2, 2),
@@ -66,6 +67,7 @@ export function sanitizeOverrides(input: unknown): StyleOverrides {
       lowerThird: bool(m.lowerThird),
       endCard: bool(m.endCard),
     }),
+    music: clean({ enabled: bool(mu.enabled), volume: num(mu.volume, 0, 1), duck: num(mu.duck, 0, 1) }),
   };
   return clean(out as Record<string, unknown>) ?? {};
 }

@@ -20,6 +20,8 @@ import { moodFromDescription } from "../src/lib/ai/mood";
 import { mergeClips } from "../src/lib/merge-clips";
 import { assetUrlsForEdl, signedAssets } from "../src/lib/assets";
 import { PRICES, recordUsage, runWithClient } from "../src/lib/usage";
+import { prepareTour } from "../src/lib/tour/prepare";
+import { chooseMusic, loadTracks } from "../src/lib/music";
 import { sanitizeOverrides } from "../src/lib/styles/sanitize";
 import { deepMerge } from "../src/lib/styles/merge";
 import { buildEdl } from "../src/lib/edl/build";
@@ -94,6 +96,26 @@ async function stepTranscribe() {
     return true;
   }
   const dir = mkdtempSync(path.join(tmpdir(), "roots-"));
+  if (edit.kind === "tour") {
+    try {
+      console.log(`→ preparando recorrido ${edit.id}`);
+      const { edl, styleId, clips } = await runWithClient(edit.client_id, () => prepareTour(db, edit, dir, console.log));
+      await db
+        .from("edits")
+        .update({
+          edl,
+          transcript: { tour: true, clips, duration: edl.duration, words: [] },
+          style_id: edit.style_id ?? styleId,
+          status: AUTO_RENDER ? "render_queued" : "review",
+        })
+        .eq("id", edit.id);
+    } catch (e) {
+      await fail(edit.id, e);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    return true;
+  }
   try {
     console.log(`→ transcribiendo ${edit.id}`);
     let file = await download(edit.recordings.storage_path, dir);
@@ -102,7 +124,7 @@ async function stepTranscribe() {
       console.log(`   uniendo ${extra.length + 1} clips...`);
       const files = [file];
       for (const p of extra) files.push(await download(p, dir));
-      file = mergeClips(files, dir);
+      file = mergeClips(files, dir).file;
       const sourcePath = `${edit.client_id}/${edit.id}-unido.mp4`;
       const { error: upErr } = await db.storage
         .from("recordings")
@@ -160,7 +182,18 @@ async function directOne(edit: any) {
     const idea = edit.content_ideas ? { title: edit.content_ideas.title, hooks: edit.content_ideas.hooks } : null;
     const assets = await signedAssets(db, edit.assets);
     if (assets.length) console.log(`   ${assets.length} imagen(es) del cliente`);
-    const direction = await directEdit({ words: tr.words, style, brand: ctx.brand.data, idea, notes, assets });
+    const tracks = await loadTracks(db, edit.client_id);
+    const direction = await directEdit({
+      words: tr.words,
+      style,
+      brand: ctx.brand.data,
+      idea,
+      notes,
+      assets,
+      tracks: tracks.map((t) => ({ title: t.title, moods: t.moods, energy: t.energy, own: !!t.client_id })),
+    });
+    direction.music = chooseMusic({ mode: edit.music_mode, musicId: edit.music_id, tracks, aiPick: direction.musicTrack, style });
+    if (direction.music) console.log(`   música: ${direction.music.title}`);
     const edl = buildEdl({ words: tr.words, sourceDuration: tr.duration, style, direction });
     const cutSecs = tr.duration - edl.segments.reduce((a, s) => a + s.end - s.start, 0);
     console.log(
@@ -200,23 +233,27 @@ async function stepRender() {
 
     const out = path.join(dir, `${edit.id}.mp4`);
     let lastPct = -10;
-    await renderAutoEdit(
-      {
-        src: signed.signedUrl,
-        edl: edit.edl,
-        style,
-        brand: { name: ctx.client.name, handle: ctx.client.instagram ?? undefined },
-        assetUrls: await assetUrlsForEdl(db, edit.edl),
-      },
-      out,
-      (p) => {
-        const pct = Math.round(p * 100);
-        if (pct - lastPct >= 10) {
-          lastPct = pct;
-          console.log(`   ${pct}%`);
-        }
-      },
-    );
+    const progress = (p: number) => {
+      const pct = Math.round(p * 100);
+      if (pct - lastPct >= 10) {
+        lastPct = pct;
+        console.log(`   ${pct}%`);
+      }
+    };
+    const musicPath: string | undefined = edit.edl?.music?.path;
+    const musicUrl = musicPath ? (await db.storage.from("brand").createSignedUrl(musicPath, 60 * 60 * 6)).data?.signedUrl ?? null : null;
+    const brand = { name: ctx.client.name, handle: ctx.client.instagram ?? undefined };
+    if (edit.edl?.type === "tour") {
+      const { data: logo } = await db.from("brand_assets").select("path").eq("client_id", edit.client_id).eq("category", "logo").limit(1).maybeSingle();
+      const logoUrl = logo?.path ? (await db.storage.from("brand").createSignedUrl(logo.path, 60 * 60 * 6)).data?.signedUrl ?? null : null;
+      await renderAutoEdit({ src: signed.signedUrl, edl: edit.edl, style, brand: { ...brand, logoUrl }, musicUrl }, out, progress, "Tour");
+    } else {
+      await renderAutoEdit(
+        { src: signed.signedUrl, edl: edit.edl, style, brand, assetUrls: await assetUrlsForEdl(db, edit.edl), musicUrl },
+        out,
+        progress,
+      );
+    }
     const final = fitUnderLimit(out, dir);
     const outputPath = `${edit.client_id}/${edit.id}.mp4`;
     const { error: upErr } = await db.storage

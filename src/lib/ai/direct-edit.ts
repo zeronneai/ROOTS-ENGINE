@@ -18,6 +18,7 @@ const DirectionSchema = z.object({
     .array(z.object({ word: z.number(), text: z.string().describe("1 a 3 palabras, máx 18 letras") }))
     .describe("Textos animados grandes que refuerzan una idea clave"),
   cta: z.string().nullable().describe("Llamado a la acción corto para el cierre (máx 5 palabras), o null"),
+  musicTrack: z.number().nullable().describe("Número de la canción de fondo que mejor queda, o null si no hay"),
   images: z
     .array(z.object({ asset: z.number().describe("número de la imagen"), word: z.number() }))
     .describe("En qué palabra aparece cada imagen marcada para mostrarse"),
@@ -57,7 +58,9 @@ export async function directEdit(opts: {
   notes?: string | null;
   /** imágenes del cliente (con url firmada para que Claude las vea) */
   assets?: EditAsset[];
-}): Promise<Direction> {
+  /** canciones disponibles (las propias del cliente primero) */
+  tracks?: { title: string; moods: string[]; energy: number; own: boolean }[];
+}): Promise<Direction & { musicTrack?: number | null }> {
   const { words, style } = opts;
   if (!words.length) return heuristicDirection(words, style);
   const assets = (opts.assets ?? []).slice(0, 8);
@@ -87,12 +90,14 @@ Decide:
 6) callouts: ${target.callouts ? `exactly ${target.callouts} big animated text graphics placed on key moments after the first ${HOOK_SECONDS} seconds and at least 2.5 seconds apart. Text of 1 to 3 words that sums up the idea (a number, result, benefit or twist), in the video's language. Not a copy of the full sentence.` : "return []"}.
 7) cta: ${style.motion.endCard ? "a short call to action for the closing card that fits what was said (ex: Agenda tu cita hoy, Visítanos este fin), in the video's language" : "null"}.
 8) images: ${show.length ? `place every image marked "show" (by its number) on the word where the speaker talks about it or where it best illustrates what is said. They appear for about 3 seconds, at least 3 seconds apart, not in the first ${HOOK_SECONDS} seconds.` : "return []"}
+9) musicTrack: ${opts.tracks?.length ? "pick the background song (by its number) that best fits the brand, the style and the energy of what is said. Prefer the client's own songs (own: true) when they fit." : "null"}
 Recorded mistakes are common: when the speaker restarts a sentence, cut the failed attempt(s) completely and keep the last complete one.
 Use only indexes that exist.`,
       user: `BRAND: ${json({ name: opts.brand.businessName, tone: opts.brand.voice?.tone, avoid: opts.brand.avoid })}
 IDEA: ${json(opts.idea ?? null)}
 ${opts.notes ? `EXTRA INSTRUCTIONS FROM THE CLIENT (follow them with the tools you have: cuts, emphasis, zooms, emojis, callouts, hook title, cta; you may go over the suggested amounts if they ask for more): ${json(opts.notes)}` : ""}
 ${assets.length ? `CLIENT IMAGES (attached in this order, numbered from 0): ${json(assets.map((a, i) => ({ number: i, use: a.use === "show" ? "show in the video" : "reference only, to understand what they want", note: a.note || null })))}` : ""}
+${opts.tracks?.length ? `SONGS (numbered from 0, energy -2 calm to 2 intense): ${json(opts.tracks.map((t, i) => ({ number: i, ...t })))}` : ""}
 TRANSCRIPT (${duration.toFixed(1)}s): ${numbered}`,
     });
     // si Claude no puede abrir las imágenes, lo intentamos sin verlas
@@ -149,6 +154,7 @@ TRANSCRIPT (${duration.toFixed(1)}s): ${numbered}`,
       hookTitle: style.overlays.hookTitle ? out.hookTitle : null,
       callouts,
       cta: style.motion.endCard ? out.cta : null,
+      musicTrack: out.musicTrack != null && opts.tracks?.[out.musicTrack] ? out.musicTrack : null,
       images: placeMissing(
         words,
         removeWords,

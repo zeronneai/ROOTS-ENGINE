@@ -52,5 +52,7 @@ export const EdlSchema = z.object({
   images: z.array(z.object({ at: z.number(), duration: z.number(), path: z.string() })).optional(),
   /** llamado a la acción del cierre */
   cta: z.string().nullable().optional(),
+  /** música de fondo (path = ruta en Storage, bucket brand) */
+  music: z.object({ path: z.string(), title: z.string(), volume: z.number(), duck: z.number() }).nullable().optional(),
 });
 export type Edl = z.infer<typeof EdlSchema>;

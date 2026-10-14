@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { StyleOverrides } from "@/lib/styles/types";
 import { sanitizeOverrides } from "@/lib/styles/sanitize";
 import { PRESETS } from "@/lib/styles/presets";
+import { cleanProperty } from "@/lib/tour/types";
 
 const str = (f: FormData, k: string) => {
   const v = f.get(k);
@@ -229,6 +230,10 @@ export async function registerRecordingAction(
     extraPaths?: string[];
     /** imágenes que acompañan al video */
     assets?: { path: string; note?: string; use: "show" | "reference" }[];
+    kind?: "talk" | "tour";
+    property?: unknown;
+    musicMode?: "auto" | "none" | "track";
+    musicId?: string | null;
   },
 ) {
   const viewer = await requireClientAccess(clientId);
@@ -271,6 +276,10 @@ export async function registerRecordingAction(
     notes: input.notes?.trim().slice(0, 1000) || null,
     ...(extraPaths.length ? { extra_paths: extraPaths } : {}),
     ...(assets.length ? { assets } : {}),
+    ...(input.kind === "tour" ? { kind: "tour", property: cleanProperty(input.property) } : {}),
+    ...(input.musicMode && input.musicMode !== "auto"
+      ? { music_mode: input.musicMode, music_id: input.musicMode === "track" ? input.musicId ?? null : null }
+      : {}),
     status: "queued",
   });
   if (input.ideaId) await db.from("content_ideas").update({ status: "recorded" }).eq("id", input.ideaId).eq("client_id", clientId);

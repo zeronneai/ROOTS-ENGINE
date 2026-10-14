@@ -6,6 +6,7 @@ import { sanitizeOverrides } from "@/lib/styles/sanitize";
 import { moodFromDescription } from "@/lib/ai/mood";
 import { deepMerge } from "@/lib/styles/merge";
 import { assetUrlsForEdl, signedAssets } from "@/lib/assets";
+import { chooseMusic, loadTracks } from "@/lib/music";
 
 export const maxDuration = 120;
 
@@ -28,11 +29,24 @@ export const POST = editRoute(async ({ edit, body, db }) => {
   }
   const style = styleForClient(ctx, { presetId: styleId, moodId, edit: overrides });
   const idea = edit.content_ideas ? { title: edit.content_ideas.title, hooks: edit.content_ideas.hooks } : null;
-  const direction = await directEdit({ words: edit.transcript.words, style, brand: ctx.brand.data, idea, notes, assets: await signedAssets(db, edit.assets) });
+  if (edit.kind === "tour") throw new Error("Para recorridos usa “Rehacer recorrido”");
+  const tracks = await loadTracks(db, edit.client_id);
+  const direction = await directEdit({
+    words: edit.transcript.words,
+    style,
+    brand: ctx.brand.data,
+    idea,
+    notes,
+    assets: await signedAssets(db, edit.assets),
+    tracks: tracks.map((t) => ({ title: t.title, moods: t.moods, energy: t.energy, own: !!t.client_id })),
+  });
+  const musicMode = typeof body.musicMode === "string" ? body.musicMode : edit.music_mode;
+  const musicId = typeof body.musicId === "string" ? body.musicId : edit.music_id;
+  direction.music = chooseMusic({ mode: musicMode, musicId, tracks, aiPick: direction.musicTrack, style });
   const edl = buildEdl({ words: edit.transcript.words, sourceDuration: edit.transcript.duration, style, direction });
   await db
     .from("edits")
-    .update({ transcript: { ...edit.transcript, direction }, edl, style_id: styleId, mood_id: moodId, style_overrides: overrides, notes })
+    .update({ transcript: { ...edit.transcript, direction }, edl, style_id: styleId, mood_id: moodId, style_overrides: overrides, notes, music_mode: musicMode ?? "auto", music_id: musicMode === "track" ? musicId : null })
     .eq("id", edit.id);
   return { edl, direction, overrides: changedStyle ? overrides : null, assetUrls: await assetUrlsForEdl(db, edl) };
 });

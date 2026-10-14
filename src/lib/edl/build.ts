@@ -18,6 +18,8 @@ export type Direction = {
   cta?: string | null;
   /** imágenes del cliente: en qué palabra aparece cada una */
   images?: { path: string; word: number }[];
+  /** canción de fondo elegida */
+  music?: { path: string; title: string } | null;
 };
 
 const FILLERS = new Set([
@@ -269,6 +271,7 @@ export function buildEdl(opts: {
     hookTitle: hook,
     callouts,
     images,
+    music: style.music?.enabled && direction.music ? { ...direction.music, volume: style.music.volume, duck: style.music.duck } : null,
     cta: style.motion?.endCard ? (direction.cta ?? null) : null,
   };
 }

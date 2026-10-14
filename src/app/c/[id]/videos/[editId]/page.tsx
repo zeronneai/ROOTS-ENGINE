@@ -8,6 +8,10 @@ import type { Edl } from "@/lib/edl/types";
 import { assetUrlsForEdl } from "@/lib/assets";
 import { LiveEdits } from "@/components/LiveEdits";
 import { Spinner } from "@/components/ApiButton";
+import { TourReview } from "@/components/tour/TourReview";
+import { loadTracks } from "@/lib/music";
+import { getClientContext, styleForClient } from "@/server/engine";
+import type { TourEdl } from "@/lib/tour/types";
 
 export default async function EditPage({ params }: { params: Promise<{ id: string; editId: string }> }) {
   const { id, editId } = await params;
@@ -24,6 +28,27 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
     db.storage.from("recordings").createSignedUrl(edit.source_path ?? edit.recordings.storage_path, 60 * 60 * 3),
     edit.output_path ? db.storage.from("renders").createSignedUrl(edit.output_path, 60 * 60) : Promise.resolve({ data: null }),
   ]);
+
+  const tracks = await Promise.all(
+    (await loadTracks(db, id)).map(async (t) => ({
+      id: t.id,
+      title: t.title,
+      path: t.path,
+      own: !!t.client_id,
+      url: (await db.storage.from("brand").createSignedUrl(t.path, 60 * 60 * 3)).data?.signedUrl ?? null,
+    })),
+  );
+  const musicChoice = { mode: (edit.music_mode ?? "auto") as "auto" | "none" | "track", id: edit.music_id ?? null };
+  const isTour = edit.kind === "tour" && (edit.edl as { type?: string } | null)?.type === "tour";
+  let tourExtras: { style: ReturnType<typeof styleForClient>; logoUrl: string | null } | null = null;
+  if (isTour) {
+    const ctx = await getClientContext(db, id);
+    const { data: logo } = await db.from("brand_assets").select("path").eq("client_id", id).eq("category", "logo").limit(1).maybeSingle();
+    tourExtras = {
+      style: styleForClient(ctx, { moodId: edit.mood_id, edit: edit.style_overrides ?? {}, presetId: edit.style_id }),
+      logoUrl: logo?.path ? (await db.storage.from("brand").createSignedUrl(logo.path, 60 * 60 * 3)).data?.signedUrl ?? null : null,
+    };
+  }
 
   const tr = edit.transcript as
     | { words: never[]; duration: number; direction?: never; silences?: { start: number; end: number }[] }
@@ -76,7 +101,7 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
         </div>
       ) : null}
 
-      {edl && tr ? (
+      {edl && tr && !isTour ? (
         <div className="card mb-6 p-4 text-sm">
           <div className="label mb-2">Lo que hizo la IA</div>
           <div className="flex flex-wrap gap-2">
@@ -91,7 +116,21 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
         </div>
       ) : null}
 
-      {tr?.words && src?.signedUrl ? (
+      {isTour && tourExtras && src?.signedUrl ? (
+        <TourReview
+          editId={edit.id}
+          clientId={id}
+          src={src.signedUrl}
+          edl={edit.edl as TourEdl}
+          style={tourExtras.style}
+          brand={{ name: client.name, handle: client.instagram ?? undefined, logoUrl: tourExtras.logoUrl }}
+          tracks={tracks}
+          music={musicChoice}
+          notes={edit.notes}
+          canApprove={["review", "done", "failed"].includes(edit.status)}
+          isAgency={isAgency}
+        />
+      ) : tr?.words && src?.signedUrl && !isTour ? (
         <EditReview
           editId={edit.id}
           src={src.signedUrl}
@@ -107,6 +146,9 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
           notes={edit.notes}
           assetUrls={assetUrls}
           isAgency={isAgency}
+          clientId={id}
+          tracks={tracks}
+          music={musicChoice}
           initial={{ presetId: edit.style_id ?? client.edit_style_id, moodId: edit.mood_id ?? brand.active_mood_id, overrides: (edit.style_overrides ?? {}) as StyleOverrides }}
           canApprove={["review", "done", "failed"].includes(edit.status)}
         />
