@@ -11,6 +11,8 @@ import { PRICES, recordUsage } from "../usage";
  */
 
 export const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-nano-banana-2.1";
+/** respaldo si el principal está saturado: Nano Banana 2 y Nano Banana Pro */
+const FALLBACK_MODELS = ["gemini-3.1-flash-image", "gemini-3-pro-image"];
 
 export type FlyerFormat = "post" | "story" | "square";
 export const FORMATS: Record<FlyerFormat, { label: string; ratio: string; fallback: string }> = {
@@ -116,22 +118,45 @@ The reference images follow, each one introduced by its role.`,
     parts.push({ inlineData: { mimeType: im.mimeType, data: im.data } });
   });
 
-  const call = (aspectRatio: string) =>
+  const call = (model: string, aspectRatio: string) =>
     ai.models.generateContent({
-      model: IMAGE_MODEL,
+      model,
       contents: [{ role: "user", parts }],
       config: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio, imageSize: "2K" } },
     });
 
+  // Si Google está saturado (503) o limita (429), reintentamos y luego usamos otro modelo de imagen como respaldo
+  const busy = (e: unknown) => /\b(503|429|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand)\b/i.test(String((e as Error)?.message ?? e));
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const models = [...new Set([IMAGE_MODEL, ...FALLBACK_MODELS])];
   const f = FORMATS[opts.format];
-  let res;
-  try {
-    res = await call(f.ratio);
-  } catch (e) {
-    if (f.fallback === f.ratio) throw e;
-    res = await call(f.fallback); // por si el modelo no acepta 4:5
+  let res: Awaited<ReturnType<typeof call>> | null = null;
+  let used = IMAGE_MODEL;
+  let lastErr: unknown = null;
+  outer: for (const model of models) {
+    for (const [attempt, wait] of [0, 4000, 9000].entries()) {
+      if (wait) await sleep(wait);
+      try {
+        try {
+          res = await call(model, f.ratio);
+        } catch (e) {
+          if (busy(e) || f.fallback === f.ratio) throw e;
+          res = await call(model, f.fallback); // por si el modelo no acepta 4:5
+        }
+        used = model;
+        break outer;
+      } catch (e) {
+        lastErr = e;
+        if (!busy(e)) break; // error distinto a saturación: probamos el siguiente modelo
+        console.error(`flyer: ${model} saturado (intento ${attempt + 1})`);
+      }
+    }
   }
-  void recordUsage({ kind: "gemini", detail: `Flyer: imagen ${opts.format}`, costUsd: PRICES.geminiImage["2K"], units: { model: IMAGE_MODEL, size: "2K" } });
+  if (!res) {
+    if (busy(lastErr)) throw new Error("Google está saturado en este momento. Espera un par de minutos y vuelve a intentar.");
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+  }
+  void recordUsage({ kind: "gemini", detail: `Flyer: imagen ${opts.format}`, costUsd: PRICES.geminiImage["2K"], units: { model: used, size: "2K" } });
   const out = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
   if (!out?.inlineData?.data) {
     const why = res.candidates?.[0]?.finishReason ?? res.promptFeedback?.blockReason ?? "sin imagen";
