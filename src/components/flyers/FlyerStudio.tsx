@@ -69,9 +69,35 @@ const stage = (s: number) => (s < 8 ? "La IA está pensando el diseño..." : s <
 
 export function FlyerStudio({ clientId, library, flyers }: { clientId: string; library: AssetView[]; flyers: FlyerView[] }) {
   const { busy, secs, err, generate } = useGenerate(clientId);
+  // el borrador se guarda en el navegador: si la página se recarga (al subir fotos de estilo, por ejemplo) no se pierde
+  const draftKey = `roots-flyer-draft-${clientId}`;
   const [brief, setBrief] = useState("");
   const [format, setFormat] = useState<Format>("post");
   const [picked, setPicked] = useState<string[]>([]);
+  const [restored, setRestored] = useState(false);
+  /* eslint-disable react-hooks/set-state-in-effect -- recuperar el borrador solo en el navegador, después de hidratar */
+  useEffect(() => {
+    try {
+      const d = JSON.parse(localStorage.getItem(draftKey) || "null");
+      if (d) {
+        if (typeof d.brief === "string") setBrief(d.brief);
+        if (d.format === "post" || d.format === "story" || d.format === "square") setFormat(d.format);
+        if (Array.isArray(d.picked)) setPicked(d.picked.filter((x: unknown) => typeof x === "string"));
+      }
+    } catch {
+      // sin almacenamiento del navegador: seguimos sin borrador
+    }
+    setRestored(true);
+  }, [draftKey]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ brief, format, picked }));
+    } catch {
+      // ignorar
+    }
+  }, [draftKey, restored, brief, format, picked]);
   const [extras, setExtras] = useState<{ file: File; url: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [adjusting, setAdjusting] = useState<string | null>(null);
