@@ -23,7 +23,7 @@ export const EdlSchema = z.object({
   height: z.number(),
   sourceDuration: z.number(),
   /** partes del original que se quedan, en orden */
-  segments: z.array(z.object({ start: z.number(), end: z.number() })),
+  segments: z.array(z.object({ start: z.number(), end: z.number(), broll: z.boolean().optional() })),
   words: z.array(WordSchema.extend({ emphasis: z.boolean().optional() })),
   zooms: z.array(
     z.object({

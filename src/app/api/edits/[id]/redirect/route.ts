@@ -7,6 +7,7 @@ import { moodFromDescription } from "@/lib/ai/mood";
 import { deepMerge } from "@/lib/styles/merge";
 import { assetUrlsForEdl, signedAssets } from "@/lib/assets";
 import { chooseMusic, loadTracks } from "@/lib/music";
+import { detectBroll } from "@/lib/edl/build";
 
 export const maxDuration = 120;
 
@@ -43,6 +44,8 @@ export const POST = editRoute(async ({ edit, body, db }) => {
   const musicMode = typeof body.musicMode === "string" ? body.musicMode : edit.music_mode;
   const musicId = typeof body.musicId === "string" ? body.musicId : edit.music_id;
   direction.music = chooseMusic({ mode: musicMode, musicId, tracks, aiPick: direction.musicTrack, style });
+  direction.broll = detectBroll(edit.transcript.words, edit.transcript.clips, edit.clip_modes ?? []);
+  direction.brollShot = edit.transcript.direction?.brollShot;
   const edl = buildEdl({ words: edit.transcript.words, sourceDuration: edit.transcript.duration, style, direction });
   await db
     .from("edits")

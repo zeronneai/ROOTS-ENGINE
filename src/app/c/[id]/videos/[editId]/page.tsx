@@ -112,6 +112,7 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
             <span className="chip">{edl.emojis.length} emojis</span>
             <span className="chip">{edl.callouts?.length ?? 0} textos animados</span>
             {edl.images?.length ? <span className="chip">{edl.images.length} imágenes</span> : null}
+            {edl.segments.some((x) => x.broll) ? <span className="chip">{edl.segments.filter((x) => x.broll).length} tomas sin voz (híbrido)</span> : null}
           </div>
         </div>
       ) : null}

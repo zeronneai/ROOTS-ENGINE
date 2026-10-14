@@ -236,6 +236,8 @@ export async function registerRecordingAction(
     musicId?: string | null;
     /** mood creado desde un video de referencia, solo para este video */
     moodId?: string | null;
+    /** video híbrido: qué es cada clip */
+    clipModes?: string[];
   },
 ) {
   const viewer = await requireClientAccess(clientId);
@@ -284,6 +286,9 @@ export async function registerRecordingAction(
     ...(assets.length ? { assets } : {}),
     ...(input.kind === "tour" ? { kind: "tour", property: cleanProperty(input.property) } : {}),
     ...(input.moodId ? { mood_id: input.moodId } : {}),
+    ...((input.clipModes ?? []).some((m) => m !== "auto")
+      ? { clip_modes: (input.clipModes ?? []).slice(0, 20).map((m) => (m === "talk" || m === "broll" ? m : "auto")) }
+      : {}),
     ...(input.musicMode && input.musicMode !== "auto"
       ? { music_mode: input.musicMode, music_id: input.musicMode === "track" ? input.musicId ?? null : null }
       : {}),

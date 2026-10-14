@@ -191,6 +191,7 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, asse
               <OffthreadVideo
                 src={videoSrc}
                 trimBefore={Math.round(s.start * fps)}
+                muted={!!s.broll && !!edl.music}
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 pauseWhenBuffering
               />

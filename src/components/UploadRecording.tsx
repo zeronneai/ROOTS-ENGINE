@@ -33,6 +33,8 @@ export function UploadRecording(props: {
   const [kind, setKind] = useState<"talk" | "tour">(RE ? "tour" : "talk");
   const [property, setProperty] = useState<Property>({});
   const [rooms, setRooms] = useState<string[]>([]);
+  // video híbrido: qué es cada clip (auto = se detecta por la voz)
+  const [clipModes, setClipModes] = useState<("auto" | "talk" | "broll")[]>([]);
   const [seconds, setSeconds] = useState(30);
   const [tracks, setTracks] = useState<TrackOpt[]>(props.tracks ?? []);
   const [music, setMusic] = useState<MusicChoice>({ mode: "auto", id: null });
@@ -47,6 +49,9 @@ export function UploadRecording(props: {
     const r = [...rooms];
     [r[i], r[i + d]] = [r[i + d], r[i]];
     setRooms(r);
+    const m = [...clipModes];
+    [m[i], m[i + d]] = [m[i + d], m[i]];
+    setClipModes(m);
   }
 
   async function submit(e: React.FormEvent) {
@@ -106,7 +111,9 @@ export function UploadRecording(props: {
         musicMode: music.mode,
         musicId: music.id,
         moodId,
+        clipModes: kind === "talk" && files.length > 1 ? files.map((_, i) => clipModes[i] ?? "auto") : [],
       });
+      setClipModes([]);
       setReference(null);
       setFiles([]);
       setRooms([]);
@@ -161,6 +168,18 @@ export function UploadRecording(props: {
               ) : (
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>
               )}
+              {kind === "talk" && files.length > 1 ? (
+                <select
+                  className="input !w-auto !py-1 text-xs"
+                  value={clipModes[i] ?? "auto"}
+                  onChange={(e) => setClipModes(Object.assign([...clipModes], { [i]: e.target.value as "auto" | "talk" | "broll" }))}
+                  title="¿Alguien habla en este clip?"
+                >
+                  <option value="auto">Detectar solo</option>
+                  <option value="talk">🎙️ Habla</option>
+                  <option value="broll">🎬 Toma</option>
+                </select>
+              ) : null}
               <span className={`shrink-0 text-xs ${f.size > MAX_UPLOAD_MB * 9e5 ? "text-warn" : "text-muted"}`} title={f.size > MAX_UPLOAD_MB * 9e5 ? "Se va a comprimir antes de subir" : undefined}>
                 {(f.size / 1e6).toFixed(0)} MB{f.size > MAX_UPLOAD_MB * 9e5 ? " · se comprime" : ""}
               </span>
@@ -172,6 +191,7 @@ export function UploadRecording(props: {
                 onClick={() => {
                   setFiles(files.filter((_, j) => j !== i));
                   setRooms(rooms.filter((_, j) => j !== i));
+                  setClipModes(clipModes.filter((_, j) => j !== i));
                 }}
                 aria-label="Quitar"
               >
@@ -202,7 +222,10 @@ export function UploadRecording(props: {
             : "Toca para escoger el video (puedes elegir varios clips)"}
       </label>
       {files.length > 1 && kind === "talk" ? (
-        <p className="text-xs text-muted">Se unen en este orden y se editan como un solo video. Las tomas repetidas o con error se quitan solas.</p>
+        <p className="text-xs text-muted">
+          Se unen en este orden y se editan como un solo video. Puedes mezclar clips donde hablas con tomas sin hablar (el lugar, el
+          producto): el sistema detecta cuál es cuál, las tomas entran con música y la música baja cuando hablas.
+        </p>
       ) : null}
       {kind === "tour" && mode === "auto" ? (
         <div className="space-y-4 rounded-2xl border border-line bg-cream/60 p-4">

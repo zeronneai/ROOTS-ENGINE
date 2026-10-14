@@ -20,7 +20,27 @@ export type Direction = {
   images?: { path: string; word: number }[];
   /** canción de fondo elegida */
   music?: { path: string; title: string } | null;
+  /** video híbrido: clips sin voz (tiempo del original) que entran como tomas con música */
+  broll?: { start: number; end: number }[];
+  /** duración de cada toma sin voz (sale del ritmo de la canción) */
+  brollShot?: number;
 };
+
+/**
+ * Video híbrido: decide qué clips son tomas sin voz.
+ * mode 'talk' / 'broll' lo decide quien subió; 'auto' = si casi no hay palabras en el clip, es toma.
+ */
+export function detectBroll(words: Word[], clips: { start: number; end: number }[] | undefined, modes: string[] = []) {
+  if (!clips || clips.length < 2) return [];
+  return clips.filter((c, i) => {
+    const mode = modes[i] ?? "auto";
+    if (mode === "talk") return false;
+    if (mode === "broll") return true;
+    const inside = words.filter((w) => w.start >= c.start - 0.05 && w.end <= c.end + 0.05);
+    const spoken = inside.reduce((a, w) => a + (w.end - w.start), 0);
+    return inside.length < 3 || spoken < (c.end - c.start) * 0.15;
+  });
+}
 
 const FILLERS = new Set([
   "eh", "ehh", "ehhh", "em", "emm", "mm", "mmm", "um", "umm", "uh", "uhh", "ah", "ahh", "erm", "hmm",
@@ -184,8 +204,28 @@ export function buildEdl(opts: {
   const fps = opts.fps ?? 30;
   const removed = new Set(direction.removeWords);
   const emph = new Set(direction.emphasis);
+  const broll = direction.broll ?? [];
+  // en las tomas sin voz no hay subtítulos: cualquier ruido que Whisper haya "escuchado" ahí se ignora
+  words.forEach((w, i) => {
+    if (broll.some((b) => w.start >= b.start - 0.05 && w.end <= b.end + 0.05)) removed.add(i);
+  });
 
-  const segments = computeSegments(words, removed, sourceDuration, style);
+  const segments: Edl["segments"] = words.some((_, i) => !removed.has(i)) || !broll.length ? computeSegments(words, removed, sourceDuration, style) : [];
+  // tomas sin voz: partes repartidas de cada clip, del largo de unos golpes de la canción
+  const shot = Math.max(1.2, Math.min(3.2, direction.brollShot ?? 2.2));
+  for (const b of broll) {
+    const from = b.start + 0.25;
+    const usable = b.end - 0.25 - from;
+    if (usable < 0.6) continue;
+    const count = usable < shot ? 1 : Math.min(3, Math.floor(usable / shot));
+    const len = Math.min(shot, usable);
+    for (let k = 0; k < count; k++) {
+      const start = count === 1 ? from + (usable - len) / 2 : from + ((usable - len) * k) / (count - 1);
+      segments.push({ start: +start.toFixed(3), end: +(start + len).toFixed(3), broll: true });
+    }
+  }
+  segments.sort((a, b) => a.start - b.start);
+  if (!segments.length) segments.push({ start: 0, end: sourceDuration });
 
   const kept = words
     .map((w, i) => ({ ...w, emphasis: emph.has(i) || undefined, _i: i }))
@@ -193,6 +233,9 @@ export function buildEdl(opts: {
 
   const nextCutAfter = (t: number) => segments.find((s) => s.end > t)?.end ?? sourceDuration;
 
+  const brollZooms: Edl["zooms"] = segments
+    .filter((s) => s.broll)
+    .map((s, k) => ({ at: s.start, duration: +(s.end - s.start).toFixed(3), scale: k % 2 ? 1.06 : 1.12, kind: "smooth" as const }));
   const zooms: Edl["zooms"] = (style.zoom.enabled ? direction.zooms : [])
     .filter((z) => words[z.word] && !removed.has(z.word))
     .map((z) => {
@@ -204,6 +247,7 @@ export function buildEdl(opts: {
       const scale = z.strength === "soft" ? 1 + (style.zoom.intensity - 1) * 0.6 : style.zoom.intensity;
       return { at, duration: +dur.toFixed(3), scale: +scale.toFixed(3), kind: style.zoom.style };
     });
+  zooms.push(...brollZooms);
 
   const firstStart = segments[0]?.start ?? 0;
   const calloutDur = 1.7;

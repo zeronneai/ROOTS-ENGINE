@@ -24,7 +24,8 @@ import { prepareTour } from "../src/lib/tour/prepare";
 import { chooseMusic, loadTracks } from "../src/lib/music";
 import { sanitizeOverrides } from "../src/lib/styles/sanitize";
 import { deepMerge } from "../src/lib/styles/merge";
-import { buildEdl } from "../src/lib/edl/build";
+import { buildEdl, detectBroll } from "../src/lib/edl/build";
+import { detectBeats } from "../src/lib/beats";
 import { getClientContext, styleForClient } from "../src/server/engine";
 import { renderAutoEdit } from "../src/server/render";
 import type { Word } from "../src/lib/edl/types";
@@ -42,6 +43,8 @@ export type StoredTranscript = {
   height: number;
   silences?: Silence[];
   audio?: AudioStats | null;
+  /** dónde empieza y termina cada clip cuando se subieron varios */
+  clips?: { start: number; end: number }[];
   direction?: Direction;
 };
 
@@ -119,12 +122,15 @@ async function stepTranscribe() {
   try {
     console.log(`→ transcribiendo ${edit.id}`);
     let file = await download(edit.recordings.storage_path, dir);
+    let clips: { start: number; end: number }[] | undefined;
     const extra: string[] = edit.extra_paths ?? [];
     if (extra.length) {
       console.log(`   uniendo ${extra.length + 1} clips...`);
       const files = [file];
       for (const p of extra) files.push(await download(p, dir));
-      file = mergeClips(files, dir).file;
+      const merged = mergeClips(files, dir);
+      file = merged.file;
+      clips = merged.clips;
       const sourcePath = `${edit.client_id}/${edit.id}-unido.mp4`;
       const { error: upErr } = await db.storage
         .from("recordings")
@@ -135,13 +141,13 @@ async function stepTranscribe() {
     const meta = probe(file);
     const { data: client } = await db.from("clients").select("language").eq("id", edit.client_id).single();
     const t = await transcribeWords(file, client?.language);
-    if (!t.words.length) throw new Error("No se detectó voz en el video");
+    if (!t.words.length && !clips) throw new Error("No se detectó voz en el video. Si son tomas sin hablar, súbelo como Cinemático o Recorrido.");
     const { silences, stats } = detectSilences(file);
     const words = fitWordsToSilences(t.words, silences);
     const pauses = silences.filter((s) => s.end - s.start >= 0.3).length;
     console.log(`   ${words.length} palabras · ${pauses} pausas detectadas · "${t.text.slice(0, 70)}${t.text.length > 70 ? "..." : ""}"`);
     if (stats) console.log(`   audio: ruido ${stats.floorDb} dB · voz ${stats.speechDb} dB · corte bajo ${stats.thresholdDb} dB`);
-    const transcript: StoredTranscript = { text: t.text, words, silences, audio: stats, ...meta };
+    const transcript: StoredTranscript = { text: t.text, words, silences, audio: stats, clips, ...meta };
     await db.from("edits").update({ transcript, status: "directing" }).eq("id", edit.id);
   } catch (e) {
     await fail(edit.id, e);
@@ -194,12 +200,35 @@ async function directOne(edit: any) {
     });
     direction.music = chooseMusic({ mode: edit.music_mode, musicId: edit.music_id, tracks, aiPick: direction.musicTrack, style });
     if (direction.music) console.log(`   música: ${direction.music.title}`);
+    // video híbrido: clips sin voz entran como tomas, del largo de unos golpes de la canción
+    direction.broll = detectBroll(tr.words, tr.clips, edit.clip_modes ?? []);
+    if (direction.broll.length) {
+      if (direction.music) {
+        const dir = mkdtempSync(path.join(tmpdir(), "roots-m-"));
+        try {
+          const { data } = await db.storage.from("brand").download(direction.music.path);
+          if (data) {
+            const song = path.join(dir, `song${path.extname(direction.music.path) || ".mp3"}`);
+            writeFileSync(song, Buffer.from(await data.arrayBuffer()));
+            const { bpm } = detectBeats(song);
+            const beat = 60 / bpm;
+            direction.brollShot = +(beat * (beat * 4 > 2.8 ? 2 : 4)).toFixed(3);
+          }
+        } catch (e) {
+          console.error("   no se pudo leer el ritmo de la canción", e);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      }
+      console.log(`   híbrido: ${direction.broll.length} clip(s) de tomas sin voz${direction.brollShot ? ` · tomas de ${direction.brollShot}s` : ""}`);
+    }
     const edl = buildEdl({ words: tr.words, sourceDuration: tr.duration, style, direction });
     const cutSecs = tr.duration - edl.segments.reduce((a, s) => a + s.end - s.start, 0);
     console.log(
       `   estilo ${style.name} · cortes: ${edl.segments.length - 1} (${cutSecs.toFixed(1)}s fuera, ${direction.removeWords.length} palabras malas)` +
         ` · zooms: ${edl.zooms.length} · emojis: ${edl.emojis.length} · textos animados: ${edl.callouts?.length ?? 0}` +
-        ` · imágenes: ${edl.images?.length ?? 0}`,
+        ` · imágenes: ${edl.images?.length ?? 0}` +
+        (direction.broll?.length ? ` · tomas sin voz: ${edl.segments.filter((s) => s.broll).length}` : ""),
     );
     await db
       .from("edits")
