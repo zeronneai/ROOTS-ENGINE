@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
+import { claudeCost, recordUsage } from "../usage";
 
 let client: Anthropic | null = null;
 export function claude() {
@@ -16,6 +17,8 @@ export async function structured<S extends z.ZodType>(opts: {
   schema: S;
   system: string;
   user: string;
+  /** qué es, para el registro de costos */
+  label?: string;
   /** URLs de imágenes para que Claude las vea (fotos de producto, referencias) */
   images?: string[];
   maxTokens?: number;
@@ -37,6 +40,13 @@ export async function structured<S extends z.ZodType>(opts: {
       },
     ],
     output_config: { format: zodOutputFormat(opts.schema) },
+  });
+  const model = opts.model ?? MODEL;
+  void recordUsage({
+    kind: "claude",
+    detail: opts.label ?? "Claude",
+    costUsd: claudeCost(model, res.usage.input_tokens, res.usage.output_tokens),
+    units: { model, input: res.usage.input_tokens, output: res.usage.output_tokens },
   });
   if (res.parsed_output == null) {
     throw new Error(`Claude no regresó salida válida (stop_reason: ${res.stop_reason})`);

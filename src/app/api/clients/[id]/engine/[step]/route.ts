@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { runWithClient } from "@/lib/usage";
 import { canAccess } from "@/server/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -17,7 +18,7 @@ export const maxDuration = 300;
 type Ctx = { params: Promise<{ id: string; step: string }> };
 
 /** Un paso del motor. Regresa { skipped } cuando no aplica (ej. no tiene redes propias). */
-export async function POST(_req: Request, ctx: Ctx) {
+async function handle(_req: Request, ctx: Ctx) {
   const { id, step } = await ctx.params;
   const viewer = await canAccess(id);
   if (!viewer) return NextResponse.json({ error: "Sin acceso" }, { status: 403 });
@@ -75,3 +76,9 @@ export async function POST(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: (e as Error).message ?? String(e) }, { status: 500 });
   }
 }
+
+/** Todo el gasto de este paso se le carga al cliente. */
+export const POST = async (req: Request, ctx: Ctx) => {
+  const { id } = await ctx.params;
+  return runWithClient(id, () => handle(req, ctx));
+};

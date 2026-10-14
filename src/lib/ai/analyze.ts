@@ -17,6 +17,7 @@ export type PostForAnalysis = {
 /** Desarma un video ganador de la competencia: hook, patrón, por qué funcionó y cómo adaptarlo. */
 export async function analyzePost(post: PostForAnalysis, brand: Partial<BrandBrain>): Promise<PostAnalysis> {
   return structured({
+    label: "Analizar videos ganadores",
     schema: PostAnalysisSchema,
     maxTokens: 2500,
     system: `${AGENCY_CONTEXT}

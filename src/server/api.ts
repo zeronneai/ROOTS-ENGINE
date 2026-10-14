@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { canAccess, type Viewer } from "./auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { runWithClient } from "@/lib/usage";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -18,7 +19,7 @@ export function clientRoute(
       return NextResponse.json({ error: "Solo la agencia" }, { status: 403 });
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     try {
-      const result = await fn({ clientId: id, viewer, body, db: supabaseAdmin() });
+      const result = await runWithClient(id, () => fn({ clientId: id, viewer, body, db: supabaseAdmin() }));
       return NextResponse.json({ ok: true, result });
     } catch (e) {
       console.error(e);

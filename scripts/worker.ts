@@ -19,6 +19,7 @@ import { directEdit } from "../src/lib/ai/direct-edit";
 import { moodFromDescription } from "../src/lib/ai/mood";
 import { mergeClips } from "../src/lib/merge-clips";
 import { assetUrlsForEdl, signedAssets } from "../src/lib/assets";
+import { PRICES, recordUsage, runWithClient } from "../src/lib/usage";
 import { sanitizeOverrides } from "../src/lib/styles/sanitize";
 import { deepMerge } from "../src/lib/styles/merge";
 import { buildEdl } from "../src/lib/edl/build";
@@ -132,6 +133,12 @@ async function stepTranscribe() {
 async function stepDirect() {
   const edit = await claim("directing", "directing_claimed");
   if (!edit) return false;
+  await runWithClient(edit.client_id, () => directOne(edit));
+  return true;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function directOne(edit: any) {
   try {
     console.log(`→ dirigiendo ${edit.id}`);
     const ctx = await getClientContext(db, edit.client_id);
@@ -175,7 +182,6 @@ async function stepDirect() {
   } catch (e) {
     await fail(edit.id, e);
   }
-  return true;
 }
 
 // ── 3. render ──
@@ -218,6 +224,7 @@ async function stepRender() {
       .upload(outputPath, readFileSync(final), { contentType: "video/mp4", upsert: true });
     if (upErr) throw upErr;
     await db.from("edits").update({ status: "done", output_path: outputPath }).eq("id", edit.id);
+    await recordUsage({ kind: "render", detail: "Render de video", costUsd: PRICES.render, clientId: edit.client_id, units: { editId: edit.id } });
     if (edit.idea_id) await db.from("content_ideas").update({ status: "edited" }).eq("id", edit.idea_id);
     console.log(`✓ listo ${edit.id}`);
   } catch (e) {

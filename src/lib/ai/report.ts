@@ -117,6 +117,7 @@ export async function buildReport(opts: {
 }) {
   const ask = <S extends z.ZodType>(schema: S, focus: string, maxTokens: number) =>
     structured({
+      label: `Reporte: ${focus.slice(0, 40)}`,
       schema,
       maxTokens,
       system: `${AGENCY_CONTEXT}

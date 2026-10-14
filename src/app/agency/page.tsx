@@ -38,6 +38,9 @@ export default async function AgencyHome() {
       />
       <main className="mx-auto max-w-7xl px-5 py-10">
         <PageTitle kicker="Agencia" title="Clientes">
+          <Link href="/agency/costos" className="btn btn-ghost">
+            $ Costos
+          </Link>
           <Link href="/agency/nuevo" className="btn btn-primary">
             + Nuevo cliente
           </Link>

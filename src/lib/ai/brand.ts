@@ -27,6 +27,7 @@ export async function synthesizeBrand(opts: {
   const presets = PRESETS.map((p) => ({ id: p.id, name: p.name, niches: p.niches, description: p.description }));
 
   return structured({
+    label: "Análisis de marca",
     schema: BrandBrainSchema,
     maxTokens: 6000,
     system: `${AGENCY_CONTEXT}

@@ -22,6 +22,7 @@ export async function planWeek(opts: {
   extraInstructions?: string | null;
 }): Promise<z.infer<typeof PlanSchema>> {
   return structured({
+    label: "Plan semanal",
     schema: PlanSchema,
     maxTokens: 12000,
     system: `${AGENCY_CONTEXT}

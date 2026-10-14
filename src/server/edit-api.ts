@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { canAccess, type Viewer } from "./auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { runWithClient } from "@/lib/usage";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -18,7 +19,7 @@ export function editRoute(
     if (!viewer) return NextResponse.json({ error: "Sin acceso" }, { status: 403 });
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     try {
-      return NextResponse.json({ ok: true, result: await fn({ edit, viewer, body, db }) });
+      return NextResponse.json({ ok: true, result: await runWithClient(edit.client_id, () => fn({ edit, viewer, body, db })) });
     } catch (e) {
       console.error(e);
       return NextResponse.json({ error: (e as Error).message ?? String(e) }, { status: 500 });

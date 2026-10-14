@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AGENCY_CONTEXT, json, structured } from "./claude";
 import type { BrandBrain } from "../types";
+import { PRICES, recordUsage } from "../usage";
 
 /**
  * Flyers con IA, como Google Flow pero con la marca del cliente ya cargada:
@@ -54,6 +55,7 @@ export async function writeFlyerPrompt(opts: {
   const manifest = opts.images.map((im, i) => ({ image: i + 1, role: im.role, label: im.label || null }));
   const urls = opts.images.map((im) => im.url).filter((u): u is string => !!u);
   const ask = (withImages: boolean) => structured({
+    label: "Flyer: dirección de arte",
     schema: PromptSchema,
     maxTokens: 2500,
     images: withImages ? urls : undefined,
@@ -119,6 +121,7 @@ The reference images follow, each one introduced by its role.`,
     if (f.fallback === f.ratio) throw e;
     res = await call(f.fallback); // por si el modelo no acepta 4:5
   }
+  void recordUsage({ kind: "gemini", detail: `Flyer: imagen ${opts.format}`, costUsd: PRICES.geminiImage["2K"], units: { model: IMAGE_MODEL, size: "2K" } });
   const out = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
   if (!out?.inlineData?.data) {
     const why = res.candidates?.[0]?.finishReason ?? res.promptFeedback?.blockReason ?? "sin imagen";

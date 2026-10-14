@@ -36,6 +36,7 @@ export async function moodFromDescription(opts: {
   references?: string[];
 }): Promise<{ name: string; presetId: string | null; overrides: StyleOverrides; toneNotes: string }> {
   const m = await structured({
+    label: "Mood / instrucciones de estilo",
     schema: MoodSchema,
     maxTokens: 1500,
     system: `${AGENCY_CONTEXT}

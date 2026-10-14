@@ -10,6 +10,7 @@ const QueriesSchema = z.object({
 /** Claude decide dónde buscar a la competencia según el giro, ciudad e idioma. */
 export async function discoveryQueries(client: ClientRow, brand: Partial<BrandBrain>) {
   return structured({
+    label: "Buscar competencia: hashtags",
     schema: QueriesSchema,
     maxTokens: 800,
     system: `${AGENCY_CONTEXT}
@@ -61,6 +62,7 @@ export async function pickCompetitors(opts: {
 }) {
   if (!opts.candidates.length) return [];
   const out = await structured({
+    label: "Buscar competencia: elegir cuentas",
     schema: PickSchema,
     maxTokens: 2500,
     system: `${AGENCY_CONTEXT}

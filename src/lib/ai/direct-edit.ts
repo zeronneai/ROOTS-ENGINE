@@ -71,6 +71,7 @@ export async function directEdit(opts: {
 
   try {
     const ask = (withImages: boolean) => structured({
+    label: "Dirección de edición de video",
       images: withImages ? assets.map((a) => a.url!).filter(Boolean) : undefined,
       schema: DirectionSchema,
       maxTokens: 4000,

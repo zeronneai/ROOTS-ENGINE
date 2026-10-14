@@ -1,3 +1,4 @@
+import { PRICES, recordUsage } from "../usage";
 /**
  * Scraping de Instagram y TikTok vía Apify (https://apify.com).
  * Actores usados (se pueden cambiar por env):
@@ -35,7 +36,20 @@ async function runActor<T>(actor: string, input: unknown): Promise<T[]> {
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) },
   );
   if (!res.ok) throw new Error(`Apify ${actor}: ${res.status} ${await res.text()}`);
-  return (await res.json()) as T[];
+  const items = (await res.json()) as T[];
+  const NAMES: Record<string, string> = {
+    "apify~instagram-reel-scraper": "Instagram: videos",
+    "apify~instagram-hashtag-scraper": "Instagram: hashtags",
+    "clockworks~tiktok-scraper": "TikTok",
+    "compass~crawler-google-places": "Google Maps",
+  };
+  void recordUsage({
+    kind: "apify",
+    detail: NAMES[actor] ?? actor,
+    costUsd: items.length * (PRICES.apify[actor] ?? 0.0025),
+    units: { actor, results: items.length },
+  });
+  return items;
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
