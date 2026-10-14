@@ -2,6 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClientContext } from "./engine";
 import { FORMATS, renderFlyer, writeFlyerPrompt, type FlyerFormat, type RefImage } from "@/lib/ai/flyer";
+import { loadResearch } from "./research";
+import { upcomingDates } from "@/lib/special-dates";
 
 type AssetRow = { id: string; kind: "style" | "library"; category: RefImage["role"]; label: string | null; path: string; pinned: boolean };
 
@@ -79,6 +81,8 @@ export async function createFlyer(
       format: input.format,
       images: refs,
       adjust: input.adjust,
+      research: await loadResearch(db, clientId, ctx.brand.data),
+      dates: upcomingDates(new Date(), 30).map(({ date, name, inDays }) => ({ date, name, inDays })),
     });
     const img = await renderFlyer({ prompt: art.prompt, texts: [art.headline, ...art.lines], format: input.format, images: refs });
 
@@ -87,6 +91,8 @@ export async function createFlyer(
     const { error: upErr } = await db.storage.from("brand").upload(outputPath, img.buffer, { contentType: img.mimeType, upsert: true });
     if (upErr) throw upErr;
     await db.from("flyers").update({ status: "done", output_path: outputPath, prompt: art.prompt }).eq("id", row.id);
+    // el copy va aparte: si falta la migración 0012 no rompe el flyer
+    await db.from("flyers").update({ caption: art.caption }).eq("id", row.id);
     return { id: row.id };
   } catch (e) {
     await db.from("flyers").update({ status: "failed", error: String((e as Error)?.message ?? e) }).eq("id", row.id);

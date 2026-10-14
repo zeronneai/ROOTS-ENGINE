@@ -25,6 +25,7 @@ export type FlyerView = {
   asset_ids: string[];
   extra_paths: string[];
   adjust: string | null;
+  caption?: string | null;
 };
 
 type Payload = { brief: string; format: Format; assetIds: string[]; extraPaths: string[]; parentId?: string; adjust?: string };
@@ -122,6 +123,14 @@ export function FlyerStudio({ clientId, library, flyers }: { clientId: string; l
 
   return (
     <div className="space-y-8">
+      <FlyerIdeas
+        clientId={clientId}
+        onUse={(idea) => {
+          setBrief(idea.brief);
+          setFormat(idea.format);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
       <div className="card space-y-5 p-5">
         <div>
           <div className="label mb-1">¿Para qué es el flyer?</div>
@@ -231,6 +240,7 @@ export function FlyerStudio({ clientId, library, flyers }: { clientId: string; l
                 </div>
                 <div className="space-y-3 p-4">
                   <p className="line-clamp-2 text-sm">{f.adjust ? `Ajuste: ${f.adjust}` : f.brief}</p>
+                  {f.caption ? <CaptionBox text={f.caption} /> : null}
                   {adjusting === f.id ? (
                     <div className="space-y-2">
                       <textarea
@@ -295,5 +305,90 @@ export function FlyerStudio({ clientId, library, flyers }: { clientId: string; l
         </div>
       ) : null}
     </div>
+  );
+}
+
+type Idea = { title: string; occasion: string | null; format: Format; brief: string; why: string; caption: string };
+
+/** La IA propone flyers con base en la investigación y las fechas especiales que vienen. */
+function FlyerIdeas({ clientId, onUse }: { clientId: string; onUse: (i: Idea) => void }) {
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [hint, setHint] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function load() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/flyers/ideas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hint }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      setIdeas(j.result.ideas);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="card space-y-4 border-purple/30 bg-cream/60 p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">¿No sabes qué hacer? Te propongo ideas</div>
+          <p className="text-xs text-muted">Con tu investigación, tu oferta, la competencia y las fechas especiales que vienen.</p>
+        </div>
+        <input className="input !w-auto min-w-0 flex-1 !py-2 text-sm" value={hint} onChange={(e) => setHint(e.target.value)} placeholder="Opcional: ej. algo para Halloween" />
+        <button className="btn btn-primary" disabled={busy} onClick={load}>
+          {busy ? <><Spinner /> Pensando...</> : ideas.length ? "↻ Otras ideas" : "✦ Sugerir ideas"}
+        </button>
+      </div>
+      {err ? <p className="text-sm text-bad">{err}</p> : null}
+      {ideas.length ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {ideas.map((i, k) => (
+            <div key={k} className="flex flex-col gap-2 rounded-2xl border border-line bg-white p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">{i.title}</span>
+                {i.occasion ? <span className="chip">{i.occasion}</span> : null}
+              </div>
+              <p className="text-sm">{i.brief}</p>
+              <p className="text-xs text-muted">{i.why}</p>
+              <button className="btn btn-ghost mt-auto !py-2 text-sm" onClick={() => onUse(i)}>
+                Usar esta idea
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Copy para publicar, con botón de copiar. */
+function CaptionBox({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <details className="rounded-xl border border-line bg-cream/60 p-3 text-sm">
+      <summary className="cursor-pointer font-semibold">Copy para publicar</summary>
+      <p className="mt-2 whitespace-pre-wrap">{text}</p>
+      <button
+        className="btn btn-ghost mt-2 !px-3 !py-1.5 text-xs"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch {
+            // sin permiso de portapapeles: que lo seleccionen a mano
+          }
+        }}
+      >
+        {copied ? "✓ Copiado" : "Copiar"}
+      </button>
+    </details>
   );
 }

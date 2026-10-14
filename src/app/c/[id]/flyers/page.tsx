@@ -40,6 +40,7 @@ export default async function FlyersPage({ params }: { params: Promise<{ id: str
       asset_ids: f.asset_ids ?? [],
       extra_paths: f.extra_paths ?? [],
       adjust: f.adjust,
+      caption: f.caption ?? null,
       url: await sign(f.output_path),
       downloadUrl: await sign(f.output_path, `flyer-${slug}-${(flyers?.length ?? 0) - i}.${f.output_path?.split(".").pop() ?? "png"}`),
     })),

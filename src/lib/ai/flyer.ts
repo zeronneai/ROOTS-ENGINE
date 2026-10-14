@@ -42,6 +42,7 @@ const PromptSchema = z.object({
   headline: z.string().describe("Título principal del flyer, corto"),
   lines: z.array(z.string()).describe("Los demás textos exactos que van en el flyer (fecha, hora, precio, dirección, llamado a la acción)"),
   prompt: z.string().describe("Prompt de dirección de arte en inglés para el modelo de imagen"),
+  caption: z.string().describe("Copy para publicar el flyer: 2 a 4 líneas que vendan, llamado a la acción y 5 a 8 hashtags locales y del giro"),
 });
 
 export async function writeFlyerPrompt(opts: {
@@ -51,6 +52,10 @@ export async function writeFlyerPrompt(opts: {
   format: FlyerFormat;
   images: RefImage[];
   adjust?: string | null;
+  /** investigación del cliente: oferta, posicionamiento, competencia, dolor del cliente */
+  research?: unknown;
+  /** fechas especiales que vienen */
+  dates?: { date: string; name: string; inDays: number }[];
 }) {
   const manifest = opts.images.map((im, i) => ({ image: i + 1, role: im.role, label: im.label || null }));
   const urls = opts.images.map((im) => im.url).filter((u): u is string => !!u);
@@ -72,9 +77,14 @@ Write a precise art direction prompt in English:
 - The flyer text is in the brand's language (Spanish by default, Mexican, casual). Keep text short: a flyer is read in 2 seconds.
 - Never invent prices, dates, addresses or phone numbers that are not in the brief.
 - No em dashes or long dashes in any text.
+- Use the RESEARCH to make the copy sell: lean on the offer and positioning, speak to the audience's pain or desire, and stand out from what competitors already do (avoid what is saturated). If the flyer is for a special date, design for that occasion.
+- Also write the caption to publish the flyer (in the brand's language): it sells the same idea, ends with a clear call to action and 5 to 8 relevant hashtags (local El Paso / Juárez and niche).
 ${opts.adjust ? "This is an EDIT of the CURRENT FLYER image: the prompt must ask to keep the design and apply only the requested changes." : ""}`,
     user: `CLIENT: ${json(opts.client)}
 BRAND: ${json({ name: opts.brand.businessName, oneLiner: opts.brand.oneLiner, tone: opts.brand.voice?.tone, visual: opts.brand.visual, cta: opts.brand.cta, avoid: opts.brand.avoid, language: opts.brand.language })}
+TODAY: ${new Date().toISOString().slice(0, 10)}
+UPCOMING SPECIAL DATES: ${json(opts.dates ?? [])}
+RESEARCH: ${json(opts.research ?? null)}
 WHAT THE FLYER IS FOR: ${json(opts.brief)}
 ${opts.adjust ? `CHANGES REQUESTED: ${json(opts.adjust)}` : ""}
 IMAGES: ${json(manifest)}`,
@@ -128,4 +138,50 @@ The reference images follow, each one introduced by its role.`,
     throw new Error(`El modelo de imagen no regresó un flyer (${why}). Intenta describirlo de otra forma.`);
   }
   return { buffer: Buffer.from(out.inlineData.data, "base64"), mimeType: out.inlineData.mimeType || "image/png" };
+}
+
+const IdeasSchema = z.object({
+  ideas: z.array(
+    z.object({
+      title: z.string().describe("Nombre corto de la idea"),
+      occasion: z.string().nullable().describe("Fecha especial que aprovecha, o null"),
+      format: z.enum(["post", "story", "square"]),
+      brief: z.string().describe("Lo que va en el flyer, como lo escribiría el cliente: oferta, textos, fecha y llamado a la acción"),
+      why: z.string().describe("Por qué esta idea, en una frase (qué de la investigación o de la fecha aprovecha)"),
+      caption: z.string().describe("Copy para publicar con llamado a la acción y hashtags"),
+    }),
+  ),
+});
+
+/** Propone flyers listos para crear, con base en la investigación, la marca y las fechas que vienen. */
+export async function suggestFlyerIdeas(opts: {
+  brand: Partial<BrandBrain>;
+  client: { name: string; niche: string | null; city: string | null };
+  research: unknown;
+  dates: { date: string; name: string; inDays: number; ideas: string }[];
+  recent: string[];
+  hint?: string | null;
+}) {
+  const out = await structured({
+    label: "Flyer: ideas",
+    schema: IdeasSchema,
+    maxTokens: 3000,
+    system: `${AGENCY_CONTEXT}
+
+You are PRA's content strategist. Propose 4 flyer ideas for this client, ready to create.
+- At least 2 should use an upcoming special date when it fits the business (skip dates that do not fit the niche or would be in poor taste for it). Mention the date naturally.
+- The rest come from the research: the offer, positioning, the audience's pains and desires, gaps in the market, and what works for competitors (adapt, never copy).
+- Each brief is written as the client would type it: what is promoted, the exact texts that should appear, date or validity, and call to action.
+- Never invent prices, discounts, addresses or phone numbers that are not in the brand or research. If an idea needs a price or discount, write it as a placeholder for the client to fill, like [precio] or [descuento].
+- Do not repeat the RECENT flyers.
+- Everything in Spanish (Mexican, casual) unless the brand posts in English. No em dashes or long dashes.`,
+    user: `CLIENT: ${json(opts.client)}
+TODAY: ${new Date().toISOString().slice(0, 10)}
+BRAND: ${json({ name: opts.brand.businessName, oneLiner: opts.brand.oneLiner, offer: opts.brand.offer, tone: opts.brand.voice?.tone, cta: opts.brand.cta, avoid: opts.brand.avoid, language: opts.brand.language })}
+UPCOMING SPECIAL DATES (inDays = days from today): ${json(opts.dates)}
+RESEARCH: ${json(opts.research)}
+RECENT FLYERS: ${json(opts.recent)}
+${opts.hint ? `THE USER IS LOOKING FOR: ${json(opts.hint)}` : ""}`,
+  });
+  return out.ideas.slice(0, 4);
 }
