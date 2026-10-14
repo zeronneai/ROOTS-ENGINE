@@ -8,6 +8,8 @@ import { CinematicFields, PropertyFields } from "./tour/PropertyFields";
 import { MusicPicker, type MusicChoice, type TrackOpt } from "./music/MusicPicker";
 import type { Property } from "@/lib/tour/types";
 import { compressIfNeeded, MAX_UPLOAD_MB } from "@/lib/compress-video";
+import { ReferenceVideo } from "./ReferenceVideo";
+import type { ReferenceAnalysis } from "@/lib/analyze-reference";
 
 type IdeaOpt = { id: string; title: string };
 
@@ -34,6 +36,7 @@ export function UploadRecording(props: {
   const [seconds, setSeconds] = useState(30);
   const [tracks, setTracks] = useState<TrackOpt[]>(props.tracks ?? []);
   const [music, setMusic] = useState<MusicChoice>({ mode: "auto", id: null });
+  const [reference, setReference] = useState<(ReferenceAnalysis & { name: string }) | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -73,6 +76,19 @@ export function UploadRecording(props: {
         if (error) throw new Error(`${im.file.name}: ${error.message}`);
         assets.push({ path, note: im.note, use: im.use });
       }
+      // video de referencia: la IA saca su estilo y se usa solo en este video
+      let moodId: string | null = null;
+      if (reference && mode === "auto") {
+        setProgress("Copiando el estilo de tu referencia...");
+        const res = await fetch(`/api/clients/${props.clientId}/moods`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frames: reference.frames, stats: reference.stats, name: reference.name, activate: false }),
+        });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error);
+        moodId = j.result.id;
+      }
       const name = files.length > 1 ? `${files[0].name} + ${files.length - 1} clip${files.length > 2 ? "s" : ""}` : files[0].name;
       await registerRecordingAction(props.clientId, {
         storagePath: paths[0],
@@ -89,7 +105,9 @@ export function UploadRecording(props: {
             : null,
         musicMode: music.mode,
         musicId: music.id,
+        moodId,
       });
+      setReference(null);
       setFiles([]);
       setRooms([]);
       setImages([]);
@@ -308,6 +326,13 @@ export function UploadRecording(props: {
           + Agregar imágenes (foto del producto, del local, antes y después, una referencia de estilo...)
         </label>
       </div>
+      {mode === "auto" ? (
+        <div>
+          <div className="label mb-1.5">Referencia de edición (opcional)</div>
+          <ReferenceVideo value={reference} onChange={setReference} />
+          <p className="mt-1 text-xs text-muted">La IA edita este video con el ritmo, subtítulos y textos de tu referencia. No se sube completa, solo se analiza.</p>
+        </div>
+      ) : null}
       <div>
         <div className="label mb-1">¿Algo extra para la edición? (opcional)</div>
         <textarea

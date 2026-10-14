@@ -3,6 +3,8 @@ import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StyleLab, type LabState } from "./StyleLab";
 import { Spinner } from "./ApiButton";
+import { ReferenceVideo } from "./ReferenceVideo";
+import type { ReferenceAnalysis } from "@/lib/analyze-reference";
 import { saveStyleAction, setActiveMoodAction, deleteMoodAction } from "@/app/actions";
 import type { Direction } from "@/lib/edl/build";
 import type { Word } from "@/lib/edl/types";
@@ -108,6 +110,7 @@ function MoodCreator({ clientId }: { clientId: string }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [refs, setRefs] = useState("");
+  const [video, setVideo] = useState<(ReferenceAnalysis & { name: string }) | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -118,12 +121,18 @@ function MoodCreator({ clientId }: { clientId: string }) {
       const res = await fetch(`/api/clients/${clientId}/moods`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: text, references: refs.split(/\s+/).filter(Boolean), activate: true }),
+        body: JSON.stringify({
+          description: text,
+          references: refs.split(/\s+/).filter(Boolean),
+          activate: true,
+          ...(video ? { frames: video.frames, stats: video.stats, name: video.name } : {}),
+        }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
       setText("");
       setRefs("");
+      setVideo(null);
       router.refresh();
     } catch (e) {
       setErr((e as Error).message);
@@ -141,7 +150,9 @@ function MoodCreator({ clientId }: { clientId: string }) {
       </p>
       <textarea rows={3} className="input" value={text} onChange={(e) => setText(e.target.value)} />
       <input className="input" value={refs} onChange={(e) => setRefs(e.target.value)} placeholder="Links o @cuentas de referencia (opcional)" />
-      <button className="btn btn-primary" disabled={busy || !text.trim()} onClick={create}>
+      <ReferenceVideo value={video} onChange={setVideo} />
+      <p className="text-xs text-muted">Con un video de referencia la IA copia su estilo de edición: ritmo, subtítulos, textos, colores. Puedes dejar el texto vacío.</p>
+      <button className="btn btn-primary" disabled={busy || (!text.trim() && !video)} onClick={create}>
         {busy ? <Spinner /> : "✦"} Crear mood con IA
       </button>
       {err ? <p className="text-xs text-bad">{err}</p> : null}

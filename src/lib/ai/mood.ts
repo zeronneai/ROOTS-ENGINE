@@ -24,6 +24,7 @@ const MoodSchema = z.object({
     .nullable()
     .describe("Look de los textos animados: sticker urbano, bar corporativo, glow brillante, minimal editorial, 3d letras con volumen que giran"),
   toneNotes: z.string().describe("Cómo cambia el tono de los guiones con este mood"),
+  summary: z.string().describe("En 1 o 2 frases y en español, qué estilo de edición se va a aplicar (lo que viste en la referencia, si hay)"),
 });
 
 /**
@@ -34,19 +35,25 @@ export async function moodFromDescription(opts: {
   description: string;
   currentStyle: EditStyle;
   references?: string[];
-}): Promise<{ name: string; presetId: string | null; overrides: StyleOverrides; toneNotes: string }> {
+  /** cuadros de un video de referencia (JPEG base64) y su ritmo de cortes */
+  frames?: string[];
+  stats?: Record<string, unknown>;
+}): Promise<{ name: string; presetId: string | null; overrides: StyleOverrides; toneNotes: string; summary: string }> {
   const m = await structured({
+    images: opts.frames?.length ? opts.frames.slice(0, 8).map((data) => ({ data, mediaType: "image/jpeg" as const })) : undefined,
     label: "Mood / instrucciones de estilo",
     schema: MoodSchema,
     maxTokens: 1500,
     system: `${AGENCY_CONTEXT}
 
 Translate a client's plain-language description of how they want their videos to feel into concrete auto-editor settings.
-Only set the fields that should change (null = keep current). Fonts available: ${AVAILABLE_FONTS.join(", ")}.
+Only set the fields that should change (null = keep current).
+If frames of a REFERENCE VIDEO are attached, the client wants their videos edited like that one: match its caption look (uppercase or not, font feel from the available fonts, highlight color, position, animation feel), emoji use, animated text graphics (motionLevel and calloutStyle), color grade and transitions. Use the cut rate in REFERENCE STATS for energy (more than 30 cuts per minute = very intense, less than 10 = calm). Keep the brand colors unless the reference clearly asks for a different palette. Fonts available: ${AVAILABLE_FONTS.join(", ")}.
 Presets: ${json(PRESETS.map((p) => ({ id: p.id, name: p.name, description: p.description })))}`,
     user: `CURRENT STYLE: ${json({ id: opts.currentStyle.id, name: opts.currentStyle.name, captions: opts.currentStyle.captions, emojis: opts.currentStyle.emojis, motion: opts.currentStyle.motion, transition: opts.currentStyle.transition })}
 CLIENT SAYS: "${opts.description}"
-REFERENCES: ${json(opts.references ?? [])}`,
+REFERENCES: ${json(opts.references ?? [])}
+${opts.stats ? `REFERENCE STATS: ${json(opts.stats)}` : ""}`,
   });
 
   const overrides: StyleOverrides = { energy: m.energy };
@@ -73,5 +80,5 @@ REFERENCES: ${json(opts.references ?? [])}`,
 
   const presetId = m.presetId && PRESETS.some((p) => p.id === m.presetId) ? m.presetId : null;
   if (presetId) overrides.presetId = presetId;
-  return { name: m.name, presetId, overrides: sanitizeOverrides(overrides), toneNotes: m.toneNotes };
+  return { name: m.name, presetId, overrides: sanitizeOverrides(overrides), toneNotes: m.toneNotes, summary: m.summary };
 }

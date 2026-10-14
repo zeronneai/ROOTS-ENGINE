@@ -146,16 +146,17 @@ export async function createMoodFromText(
   description: string,
   role: "agency" | "client",
   references: string[] = [],
+  reference?: { frames: string[]; stats: Record<string, unknown>; name?: string | null },
 ) {
   const ctx = await getClientContext(db, clientId);
   const current = styleForClient(ctx);
-  const m = await moodFromDescription({ description, currentStyle: current, references });
+  const m = await moodFromDescription({ description, currentStyle: current, references, frames: reference?.frames, stats: reference?.stats });
   const { data, error } = await db
     .from("moods")
     .insert({
       client_id: clientId,
-      name: m.name,
-      description,
+      name: reference?.name ? `Como: ${reference.name}`.slice(0, 60) : m.name,
+      description: reference ? m.summary : description,
       style_overrides: m.overrides,
       tone_notes: m.toneNotes,
       created_by_role: role,

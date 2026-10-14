@@ -234,6 +234,8 @@ export async function registerRecordingAction(
     property?: unknown;
     musicMode?: "auto" | "none" | "track";
     musicId?: string | null;
+    /** mood creado desde un video de referencia, solo para este video */
+    moodId?: string | null;
   },
 ) {
   const viewer = await requireClientAccess(clientId);
@@ -246,6 +248,10 @@ export async function registerRecordingAction(
     return { path: a.path, note: String(a.note ?? "").slice(0, 300), use: a.use === "reference" ? "reference" : "show" };
   });
   const db = supabaseAdmin();
+  if (input.moodId) {
+    const { data: mood } = await db.from("moods").select("id").eq("id", input.moodId).eq("client_id", clientId).maybeSingle();
+    if (!mood) input = { ...input, moodId: null };
+  }
   if (viewer.role !== "agency") {
     const { data: c } = await db.from("clients").select("plan_tier").eq("id", clientId).single();
     const allowed: string[] =
@@ -277,6 +283,7 @@ export async function registerRecordingAction(
     ...(extraPaths.length ? { extra_paths: extraPaths } : {}),
     ...(assets.length ? { assets } : {}),
     ...(input.kind === "tour" ? { kind: "tour", property: cleanProperty(input.property) } : {}),
+    ...(input.moodId ? { mood_id: input.moodId } : {}),
     ...(input.musicMode && input.musicMode !== "auto"
       ? { music_mode: input.musicMode, music_id: input.musicMode === "track" ? input.musicId ?? null : null }
       : {}),
