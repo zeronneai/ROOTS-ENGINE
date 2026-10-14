@@ -27,12 +27,16 @@ export const PRICES = {
   render: 0.01,
 };
 
-/** Costos fijos mensuales (USD). Se pueden cambiar con variables de entorno. */
+/**
+ * Costos fijos mensuales (USD). Arrancan en 0 porque hoy todo está en planes gratis.
+ * Cuando pases a un plan de pago, pon su precio en Vercel → Environment Variables (COST_VERCEL=20, etc.).
+ */
+const fixed = (env: string | undefined) => Number(env ?? 0) || 0;
 export const FIXED_MONTHLY = [
-  { name: "Vercel Pro", usd: Number(process.env.COST_VERCEL ?? 20) },
-  { name: "Supabase Pro", usd: Number(process.env.COST_SUPABASE ?? 25) },
-  { name: "Apify Starter (trae 19 USD de crédito)", usd: Number(process.env.COST_APIFY ?? 19), credit: "apify" as const },
-  { name: "Remotion (mínimo mensual)", usd: Number(process.env.COST_REMOTION ?? 100), credit: "render" as const },
+  { name: "Vercel", usd: fixed(process.env.COST_VERCEL), paidHint: "Pro: 20 USD (obligatorio al cobrarle a clientes)" },
+  { name: "Supabase", usd: fixed(process.env.COST_SUPABASE), paidHint: "Pro: 25 USD (videos de más de 50 MB y más espacio)" },
+  { name: "Apify", usd: fixed(process.env.COST_APIFY), credit: "apify" as const, paidHint: "Starter: 19 USD, trae 19 USD de crédito" },
+  { name: "Remotion", usd: fixed(process.env.COST_REMOTION), credit: "render" as const, paidHint: "Gratis hasta 3 personas en la empresa" },
 ];
 
 export type UsageKind = "claude" | "apify" | "gemini" | "render";

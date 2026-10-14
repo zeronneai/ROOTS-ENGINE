@@ -65,12 +65,15 @@ export default async function CostosPage({ searchParams }: { searchParams: Promi
 
   // fijos con sus créditos: Apify trae 19 USD de crédito; Remotion cobra 0.01 por render con mínimo mensual
   const fixed = FIXED_MONTHLY.map((f) => {
-    if (f.credit === "apify") return { ...f, charged: Math.max(f.usd, apify), note: `${usd(apify)} usados del crédito` };
-    if (f.credit === "render") return { ...f, charged: Math.max(f.usd, renders * PRICES.render), note: `${renders} renders` };
-    return { ...f, charged: f.usd, note: "" };
+    const plan = f.usd ? "" : "Plan gratis · ";
+    // en el plan gratis de Apify el uso se paga aparte después de 5 USD de crédito
+    if (f.credit === "apify") return { ...f, charged: f.usd ? Math.max(f.usd, apify) : Math.max(0, apify - 5), note: `${plan}${usd(apify)} de uso este mes · ${f.paidHint}` };
+    if (f.credit === "render") return { ...f, charged: f.usd ? Math.max(f.usd, renders * PRICES.render) : 0, note: `${plan}${renders} renders · ${f.paidHint}` };
+    return { ...f, charged: f.usd, note: `${plan}${f.paidHint}` };
   });
   const fixedTotal = fixed.reduce((a, f) => a + f.charged, 0);
-  const total = fixedTotal + claude + gemini; // apify y renders ya van dentro de sus fijos
+  const apifyPaid = FIXED_MONTHLY.some((f) => f.credit === "apify" && f.usd > 0);
+  const total = fixedTotal + claude + gemini; // apify y renders ya van dentro de sus renglones fijos
 
   // almacenamiento
   const st = (storage.data ?? []) as { client_folder: string; bucket: string; bytes: number; files: number }[];
@@ -160,7 +163,7 @@ export default async function CostosPage({ searchParams }: { searchParams: Promi
                   <td className="text-right">{usd(c.gemini)}</td>
                   <td className="text-right">{c.renders}</td>
                   <td className="text-right font-semibold">{usd(c.variable)}</td>
-                  <td className="text-right">{usd(c.variable - c.apify - c.renders * PRICES.render + fixedShare)}</td>
+                  <td className="text-right">{usd(c.variable - (apifyPaid ? c.apify : 0) - c.renders * PRICES.render + fixedShare)}</td>
                   <td className="text-right">{c.videos}</td>
                   <td className="text-right">{c.flyers}</td>
                   <td className="text-right">{gb(c.bytes).toFixed(1)} GB</td>
@@ -238,7 +241,8 @@ export default async function CostosPage({ searchParams }: { searchParams: Promi
 
         <p className="text-xs text-muted">
           Precios de lista en USD: Claude Sonnet {PRICES.claude["claude-sonnet-5-5"][0]}/{PRICES.claude["claude-sonnet-5-5"][1]} por millón de tokens,
-          Apify por resultado, imagen 2K {usd(PRICES.geminiImage["2K"], 3)}, render {usd(PRICES.render)}. Pesos a {USD_MXN} por dólar (cámbialo con
+          Apify por resultado, imagen 2K {usd(PRICES.geminiImage["2K"], 3)}. Los fijos salen en 0 mientras estés en planes gratis: cuando
+          pases a uno de pago, agrega su precio en Vercel (COST_VERCEL, COST_SUPABASE, COST_APIFY, COST_REMOTION). Pesos a {USD_MXN} por dólar (cámbialo con
           USD_MXN en Vercel). Zona horaria: {TIME_ZONE}. Los gastos se registran desde que se activó este panel.
         </p>
       </main>
