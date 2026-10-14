@@ -107,7 +107,9 @@ export function UploadRecording(props: {
         property:
           kind === "tour" && mode === "auto"
             ? { ...property, rooms: files.map((_, i) => rooms[i] ?? ""), seconds, variant: RE ? "realestate" : "cinematic" }
-            : null,
+            : kind === "talk" && mode === "auto" && files.length > 1
+              ? { ...property, variant: RE ? "realestate" : "cinematic" }
+              : null,
         musicMode: music.mode,
         musicId: music.id,
         moodId,
@@ -226,6 +228,17 @@ export function UploadRecording(props: {
           Se unen en este orden y se editan como un solo video. Puedes mezclar clips donde hablas con tomas sin hablar (el lugar, el
           producto): el sistema detecta cuál es cuál, las tomas entran con música y la música baja cuando hablas.
         </p>
+      ) : null}
+      {files.length > 1 && kind === "talk" && mode === "auto" ? (
+        <details className="rounded-2xl border border-line bg-cream/60 p-4">
+          <summary className="cursor-pointer font-semibold">{RE ? "Datos de la propiedad para las tomas (opcional)" : "Textos para las tomas (opcional)"}</summary>
+          <p className="mt-1 text-xs text-muted">
+            {RE
+              ? "En las tomas sin voz salen animados el nombre del cuarto, las medidas y al final el precio y tu teléfono. Lo que no llenes no aparece. La IA nunca inventa precios ni medidas."
+              : "En las tomas sin voz salen animados el nombre de la toma y frases cortas. Lo que no llenes lo propone la IA según lo que ve."}
+          </p>
+          <div className="mt-3">{RE ? <PropertyFields value={property} onChange={setProperty} /> : <CinematicFields value={property} onChange={setProperty} />}</div>
+        </details>
       ) : null}
       {kind === "tour" && mode === "auto" ? (
         <div className="space-y-4 rounded-2xl border border-line bg-cream/60 p-4">

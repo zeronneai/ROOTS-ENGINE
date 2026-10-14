@@ -1,5 +1,6 @@
 import type { EditStyle } from "../styles/types";
 import type { Edl, SfxKind, Word } from "./types";
+import type { ClipGrade } from "../grade-types";
 
 /**
  * "Dirección" = decisiones creativas por índice de palabra.
@@ -24,6 +25,24 @@ export type Direction = {
   broll?: { start: number; end: number }[];
   /** duración de cada toma sin voz (sale del ritmo de la canción) */
   brollShot?: number;
+  /** corrección de color medida para cada clip (tiempo del original) */
+  grades?: { start: number; end: number; grade: ClipGrade }[];
+  /** textos para las tomas sin voz (en el orden de `broll`) */
+  brollCopy?: BrollCopy;
+};
+
+export type BrollCopy = {
+  /** nombre de cada clip de tomas: Fachada, Cocina, Tacos al pastor... */
+  labels: string[];
+  /** datos de la propiedad (inmobiliaria) */
+  specs: { icon: string; value: string; label: string }[];
+  /** frases cortas y amenidades */
+  highlights: string[];
+  /** el que escribió el usuario (gana sobre todo) */
+  cta?: string | null;
+  /** el que propuso la IA viendo las tomas (si no hay otro) */
+  fallbackCta?: string | null;
+  endInfo?: { price?: string | null; agentName?: string | null; agentPhone?: string | null } | null;
 };
 
 /**
@@ -213,19 +232,50 @@ export function buildEdl(opts: {
   const segments: Edl["segments"] = words.some((_, i) => !removed.has(i)) || !broll.length ? computeSegments(words, removed, sourceDuration, style) : [];
   // tomas sin voz: partes repartidas de cada clip, del largo de unos golpes de la canción
   const shot = Math.max(1.2, Math.min(3.2, direction.brollShot ?? 2.2));
+  // cámara lenta: cada toma usa menos video original y dura lo mismo en el video final
+  const rate = Math.max(0.4, Math.min(1, style.pacing.brollSpeed ?? 1));
   for (const b of broll) {
     const from = b.start + 0.25;
     const usable = b.end - 0.25 - from;
     if (usable < 0.6) continue;
-    const count = usable < shot ? 1 : Math.min(3, Math.floor(usable / shot));
-    const len = Math.min(shot, usable);
+    const srcLen = shot * rate;
+    const count = usable < srcLen ? 1 : Math.min(3, Math.floor(usable / srcLen));
+    const len = Math.min(srcLen, usable);
     for (let k = 0; k < count; k++) {
       const start = count === 1 ? from + (usable - len) / 2 : from + ((usable - len) * k) / (count - 1);
-      segments.push({ start: +start.toFixed(3), end: +(start + len).toFixed(3), broll: true });
+      segments.push({ start: +start.toFixed(3), end: +(start + len).toFixed(3), broll: true, ...(rate < 0.99 ? { rate } : {}) });
     }
   }
   segments.sort((a, b) => a.start - b.start);
   if (!segments.length) segments.push({ start: 0, end: sourceDuration });
+  // corrección de color del clip al que pertenece cada tramo
+  if (style.grade.auto !== false && direction.grades?.length) {
+    for (const s of segments) {
+      const mid = (s.start + s.end) / 2;
+      const g = direction.grades.find((x) => mid >= x.start && mid <= x.end) ?? direction.grades[0];
+      if (g) s.grade = g.grade;
+    }
+  }
+
+  // textos sobre las tomas sin voz: nombre de la toma al entrar y un dato o frase por toma
+  const overlays: NonNullable<Edl["overlays"]> = [];
+  const copy = direction.brollCopy;
+  if (copy && style.motion?.level !== "none") {
+    const queue: Omit<NonNullable<Edl["overlays"]>[number], "at" | "duration">[] = [
+      ...copy.specs.map((sp) => ({ kind: "spec" as const, text: sp.label, icon: sp.icon, value: sp.value })),
+      ...copy.highlights.filter((h) => h.trim()).map((h) => ({ kind: "highlight" as const, text: h.trim().slice(0, 32) })),
+    ];
+    let q = 0;
+    broll.forEach((b, i) => {
+      const segs = segments.filter((s) => s.broll && s.start >= b.start - 0.01 && s.end <= b.end + 0.01);
+      segs.forEach((s, j) => {
+        const dur = (s.end - s.start) / (s.rate ?? 1);
+        const label = copy.labels[i]?.trim();
+        if (j === 0 && label) overlays.push({ at: s.start, duration: +dur.toFixed(3), kind: "label", text: label.slice(0, 28) });
+        if (q < queue.length && dur >= 1) overlays.push({ at: +(s.start + 0.05).toFixed(3), duration: +(dur - 0.15).toFixed(3), ...queue[q++] });
+      });
+    });
+  }
 
   const kept = words
     .map((w, i) => ({ ...w, emphasis: emph.has(i) || undefined, _i: i }))
@@ -235,7 +285,7 @@ export function buildEdl(opts: {
 
   const brollZooms: Edl["zooms"] = segments
     .filter((s) => s.broll)
-    .map((s, k) => ({ at: s.start, duration: +(s.end - s.start).toFixed(3), scale: k % 2 ? 1.06 : 1.12, kind: "smooth" as const }));
+    .map((s, k) => ({ at: s.start, duration: +((s.end - s.start) / (s.rate ?? 1)).toFixed(3), scale: k % 2 ? 1.06 : 1.12, kind: "smooth" as const }));
   const zooms: Edl["zooms"] = (style.zoom.enabled ? direction.zooms : [])
     .filter((z) => words[z.word] && !removed.has(z.word))
     .map((z) => {
@@ -316,7 +366,9 @@ export function buildEdl(opts: {
     callouts,
     images,
     music: style.music?.enabled && direction.music ? { ...direction.music, volume: style.music.volume, duck: style.music.duck } : null,
-    cta: style.motion?.endCard ? (direction.cta ?? null) : null,
+    cta: style.motion?.endCard ? (copy?.cta || direction.cta || copy?.fallbackCta || null) : null,
+    overlays,
+    endInfo: style.motion?.endCard && copy?.endInfo ? copy.endInfo : null,
   };
 }
 
@@ -381,13 +433,13 @@ export function makeTimeMap(segments: Edl["segments"]) {
   let acc = 0;
   for (const s of segments) {
     offsets.push(acc);
-    acc += s.end - s.start;
+    acc += (s.end - s.start) / (s.rate ?? 1);
   }
   const total = acc;
   const toOut = (t: number): number | null => {
     for (let i = 0; i < segments.length; i++) {
       const s = segments[i];
-      if (t >= s.start && t <= s.end) return offsets[i] + (t - s.start);
+      if (t >= s.start && t <= s.end) return offsets[i] + (t - s.start) / (s.rate ?? 1);
     }
     return null;
   };

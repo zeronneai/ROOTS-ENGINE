@@ -62,7 +62,7 @@ const BASE: EditStyle = {
   emojis: { density: "medium", sizePx: 150, animation: "pop", palette: ["🔥", "💡", "👇", "✅", "🤯"] },
   sfx: { enabled: true, volume: 0.5, onZoom: "whoosh", onEmoji: "pop", onCut: "none" },
   grade: { filter: "contrast(1.08) saturate(1.08)", vignette: 0.25, grain: 0, tint: "transparent" },
-  pacing: { cutSilencesOverMs: 300, keepPaddingMs: 80, removeFillers: true },
+  pacing: { cutSilencesOverMs: 300, keepPaddingMs: 80, removeFillers: true, brollSpeed: 1 },
   overlays: {
     progressBar: true,
     progressColor: "#22C55E",
@@ -114,7 +114,7 @@ export const PRESETS: EditStyle[] = [
     emojis: { density: "none", palette: [] },
     sfx: { enabled: false, onZoom: "none", onEmoji: "none" },
     grade: { filter: "contrast(1.05) saturate(0.9)", vignette: 0.2 },
-    pacing: { cutSilencesOverMs: 450, keepPaddingMs: 140 },
+    pacing: { cutSilencesOverMs: 450, keepPaddingMs: 140, brollSpeed: 0.85 },
     overlays: {
       progressBar: false, hookTitleFont: "Playfair Display", hookTitleColor: "#FFFFFF",
       hookTitleBg: "rgba(10,10,14,0.85)", handle: true,
@@ -137,7 +137,7 @@ export const PRESETS: EditStyle[] = [
     emojis: { density: "low", sizePx: 120, animation: "float", palette: ["✨", "💖", "🌸", "💆‍♀️", "🤍"] },
     sfx: { volume: 0.3, onZoom: "none", onEmoji: "ding" },
     grade: { filter: "brightness(1.05) saturate(0.95) contrast(0.98)", vignette: 0.12, tint: "rgba(255,190,170,0.06)" },
-    pacing: { cutSilencesOverMs: 380, keepPaddingMs: 120 },
+    pacing: { cutSilencesOverMs: 380, keepPaddingMs: 120, brollSpeed: 0.75 },
     overlays: { progressColor: "#F9C6CF", hookTitleFont: "Playfair Display", hookTitleBg: "#FFF5F7", hookTitleColor: "#5B2333" },
     motion: { level: "medium", calloutStyle: "glow", bursts: true, lowerThird: true },
     music: { volume: 0.26 },
@@ -215,6 +215,7 @@ export const PRESETS: EditStyle[] = [
     overlays: { progressColor: "#2DD4BF", hookTitleFont: "Nunito", hookTitleBg: "#2DD4BF", hookTitleColor: "#062830" },
     motion: { level: "medium", calloutStyle: "bar", bursts: true, lowerThird: true },
     music: { volume: 0.24 },
+    pacing: { brollSpeed: 0.85 },
     transition: "fade",
   }),
   define({
@@ -231,7 +232,7 @@ export const PRESETS: EditStyle[] = [
     emojis: { density: "none", palette: [] },
     sfx: { enabled: false, onZoom: "none", onEmoji: "none" },
     grade: { filter: "contrast(1.06) saturate(0.82)", vignette: 0.3, grain: 0.1 },
-    pacing: { cutSilencesOverMs: 500, keepPaddingMs: 160 },
+    pacing: { cutSilencesOverMs: 500, keepPaddingMs: 160, brollSpeed: 0.7 },
     overlays: {
       progressBar: false, hookTitleFont: "Cormorant Garamond", hookTitleBg: "transparent",
       hookTitleColor: "#FFFFFF", handle: true,
@@ -256,6 +257,7 @@ export const PRESETS: EditStyle[] = [
     overlays: { progressColor: "#F59E0B", hookTitleFont: "Rye", hookTitleBg: "#F5E6C8", hookTitleColor: "#2B1608" },
     motion: { level: "medium", calloutStyle: "sticker", bursts: false },
     music: { volume: 0.32 },
+    pacing: { brollSpeed: 0.85 },
     transition: "whip",
   }),
   define({

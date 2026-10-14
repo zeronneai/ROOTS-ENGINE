@@ -70,12 +70,14 @@ export const EditStyleSchema = z.object({
     vignette: z.number(), // 0..1
     grain: z.number(), // 0..1
     tint: z.string(), // rgba overlay
+    auto: z.boolean().optional(), // corrección automática de exposición y color por clip (default: sí)
   }),
 
   pacing: z.object({
     cutSilencesOverMs: z.number(),
     keepPaddingMs: z.number(),
     removeFillers: z.boolean(),
+    brollSpeed: z.number().optional(), // velocidad de las tomas sin voz: 1 normal, 0.7 slow motion
   }),
 
   overlays: z.object({

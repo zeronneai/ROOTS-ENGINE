@@ -26,10 +26,12 @@ import { sanitizeOverrides } from "../src/lib/styles/sanitize";
 import { deepMerge } from "../src/lib/styles/merge";
 import { buildEdl, detectBroll } from "../src/lib/edl/build";
 import { detectBeats } from "../src/lib/beats";
+import { isNeutral, measureClipGrades, type ClipGrade } from "../src/lib/grade";
 import { getClientContext, styleForClient } from "../src/server/engine";
 import { renderAutoEdit } from "../src/server/render";
 import type { Word } from "../src/lib/edl/types";
-import type { Direction } from "../src/lib/edl/build";
+import type { BrollCopy, Direction } from "../src/lib/edl/build";
+import { hybridCopy } from "../src/lib/tour/hybrid";
 
 const db = supabaseAdmin();
 const AUTO_RENDER = process.env.AUTO_RENDER === "true";
@@ -45,6 +47,10 @@ export type StoredTranscript = {
   audio?: AudioStats | null;
   /** dónde empieza y termina cada clip cuando se subieron varios */
   clips?: { start: number; end: number }[];
+  /** corrección de color medida por clip */
+  grades?: { start: number; end: number; grade: ClipGrade }[];
+  /** híbrido: nombre de cada toma sin voz, datos y frases */
+  brollCopy?: BrollCopy;
   direction?: Direction;
 };
 
@@ -147,7 +153,23 @@ async function stepTranscribe() {
     const pauses = silences.filter((s) => s.end - s.start >= 0.3).length;
     console.log(`   ${words.length} palabras · ${pauses} pausas detectadas · "${t.text.slice(0, 70)}${t.text.length > 70 ? "..." : ""}"`);
     if (stats) console.log(`   audio: ruido ${stats.floorDb} dB · voz ${stats.speechDb} dB · corte bajo ${stats.thresholdDb} dB`);
-    const transcript: StoredTranscript = { text: t.text, words, silences, audio: stats, clips, ...meta };
+    // corrección automática de color: una medición por clip (o una para todo el video)
+    const ranges = clips ?? [{ start: 0, end: meta.duration }];
+    const grades = measureClipGrades(file, ranges).map((grade, i) => ({ ...ranges[i], grade }));
+    const fixed = grades.filter((g) => !isNeutral(g.grade)).length;
+    if (fixed) console.log(`   color: corrigiendo ${fixed} de ${grades.length} clip(s)`);
+    // híbrido: la IA ve las tomas sin voz para ponerles nombre, datos y frases
+    let brollCopy: BrollCopy | undefined;
+    const brollClips = detectBroll(words, clips, edit.clip_modes ?? []);
+    if (brollClips.length) {
+      try {
+        brollCopy = await runWithClient(edit.client_id, () => hybridCopy(db, edit, file, brollClips, dir));
+        console.log(`   tomas: ${brollCopy.labels.filter(Boolean).join(", ") || "sin nombre"} · ${brollCopy.specs.length} dato(s) · ${brollCopy.highlights.length} frase(s)`);
+      } catch (e) {
+        console.error("   no se pudieron escribir los textos de las tomas", e);
+      }
+    }
+    const transcript: StoredTranscript = { text: t.text, words, silences, audio: stats, clips, grades, brollCopy, ...meta };
     await db.from("edits").update({ transcript, status: "directing" }).eq("id", edit.id);
   } catch (e) {
     await fail(edit.id, e);
@@ -201,6 +223,8 @@ async function directOne(edit: any) {
     direction.music = chooseMusic({ mode: edit.music_mode, musicId: edit.music_id, tracks, aiPick: direction.musicTrack, style });
     if (direction.music) console.log(`   música: ${direction.music.title}`);
     // video híbrido: clips sin voz entran como tomas, del largo de unos golpes de la canción
+    direction.grades = tr.grades;
+    direction.brollCopy = tr.brollCopy;
     direction.broll = detectBroll(tr.words, tr.clips, edit.clip_modes ?? []);
     if (direction.broll.length) {
       if (direction.music) {

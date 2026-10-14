@@ -285,6 +285,10 @@ export async function registerRecordingAction(
     ...(extraPaths.length ? { extra_paths: extraPaths } : {}),
     ...(assets.length ? { assets } : {}),
     ...(input.kind === "tour" ? { kind: "tour", property: cleanProperty(input.property) } : {}),
+    // híbrido: datos para las tomas sin voz (solo si llenaron algo)
+    ...(input.kind !== "tour" && extraPaths.length && hasPropertyData(cleanProperty(input.property))
+      ? { property: cleanProperty(input.property) }
+      : {}),
     ...(input.moodId ? { mood_id: input.moodId } : {}),
     ...((input.clipModes ?? []).some((m) => m !== "auto")
       ? { clip_modes: (input.clipModes ?? []).slice(0, 20).map((m) => (m === "talk" || m === "broll" ? m : "auto")) }
@@ -318,4 +322,8 @@ export async function setPreviewAction(clientId: string, on: boolean) {
   if (on) jar.set("pra_preview_client", clientId, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 8 });
   else jar.delete("pra_preview_client");
   redirect(`/c/${clientId}`);
+}
+
+function hasPropertyData(p: ReturnType<typeof cleanProperty>) {
+  return Object.entries(p).some(([k, v]) => k !== "variant" && k !== "seconds" && v != null && !(Array.isArray(v) && !v.length));
 }

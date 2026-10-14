@@ -346,7 +346,12 @@ export const LowerThird: React.FC<{ name: string; handle?: string; style: EditSt
 };
 
 /** Cierre: llamado a la acción y @usuario en los últimos segundos. */
-export const EndCard: React.FC<{ cta?: string | null; handle?: string; style: EditStyle }> = ({ cta, handle, style }) => {
+export const EndCard: React.FC<{
+  cta?: string | null;
+  handle?: string;
+  style: EditStyle;
+  info?: { price?: string | null; agentName?: string | null; agentPhone?: string | null } | null;
+}> = ({ cta, handle, style, info }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const k = width / 1080;
@@ -395,6 +400,21 @@ export const EndCard: React.FC<{ cta?: string | null; handle?: string; style: Ed
             }}
           >
             {cta}
+          </div>
+        ) : null}
+        {info?.price ? (
+          <div style={{ transform: `scale(${p2})`, fontFamily: `"Inter", sans-serif`, fontWeight: 800, fontSize: 76 * k, color: accent, letterSpacing: -2 * k, textShadow: "0 6px 26px rgba(0,0,0,0.6)" }}>
+            {info.price}
+          </div>
+        ) : null}
+        {info?.agentName || info?.agentPhone ? (
+          <div style={{ opacity: p2, fontFamily: `"Inter", sans-serif`, color: "#fff", fontSize: 38 * k, lineHeight: 1.35, textAlign: "center", textShadow: "0 4px 18px rgba(0,0,0,0.7)" }}>
+            {info.agentName ? <div style={{ fontWeight: 700 }}>{info.agentName}</div> : null}
+            {info.agentPhone ? (
+              <div style={{ fontWeight: 600 }}>
+                <span style={{ fontFamily: EMOJI_FONT_STACK }}>📞</span> {info.agentPhone}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {handle ? (

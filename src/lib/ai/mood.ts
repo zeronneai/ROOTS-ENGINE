@@ -18,6 +18,8 @@ const MoodSchema = z.object({
   sfxEnabled: z.boolean().nullable(),
   colorGradeFilter: z.string().nullable().describe("CSS filter, ej: contrast(1.1) saturate(0.9)"),
   transition: z.enum(["none", "flash", "whip", "glitch", "fade"]).nullable(),
+  slowMotion: z.boolean().nullable().describe("true = tomas sin voz en cámara lenta, false = velocidad normal, null = no cambiar"),
+  autoColor: z.boolean().nullable().describe("false solo si piden NO corregir el color; null = no cambiar"),
   motionLevel: z.enum(["none", "low", "medium", "high"]).nullable().describe("Cuántos textos animados y efectos (motion graphics)"),
   calloutStyle: z
     .enum(["sticker", "bar", "glow", "minimal", "3d"])
@@ -69,7 +71,9 @@ ${opts.stats ? `REFERENCE STATS: ${json(opts.stats)}` : ""}`,
       ...(m.emojiPalette ? { palette: m.emojiPalette } : {}),
     };
   if (m.sfxEnabled !== null) overrides.sfx = { enabled: m.sfxEnabled };
-  if (m.colorGradeFilter) overrides.grade = { filter: m.colorGradeFilter };
+  if (m.colorGradeFilter || m.autoColor !== null)
+    overrides.grade = { ...(m.colorGradeFilter ? { filter: m.colorGradeFilter } : {}), ...(m.autoColor !== null ? { auto: m.autoColor } : {}) };
+  if (m.slowMotion !== null) overrides.pacing = { brollSpeed: m.slowMotion ? 0.6 : 1 };
   if (m.transition) overrides.transition = m.transition;
   if (m.motionLevel || m.calloutStyle)
     overrides.motion = {

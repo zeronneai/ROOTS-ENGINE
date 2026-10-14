@@ -85,5 +85,7 @@ export const TourEdlSchema = z.object({
   }),
   rooms: z.array(z.string()), // etiqueta por clip
   music: z.object({ path: z.string(), title: z.string(), volume: z.number() }).nullable(),
+  /** corrección de color por clip (mismo orden que los clips) */
+  grades: z.array(z.object({ r: z.number(), g: z.number(), b: z.number(), brightness: z.number(), contrast: z.number(), saturate: z.number() })).optional(),
 });
 export type TourEdl = z.infer<typeof TourEdlSchema>;

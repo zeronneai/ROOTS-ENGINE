@@ -9,6 +9,7 @@ import { tourCopy } from "../ai/tour";
 import { planShots } from "./plan";
 import { cleanProperty, type TourEdl } from "./types";
 import { getClientContext, styleForClient } from "../../server/engine";
+import { isNeutral, measureClipGrades } from "../grade";
 
 const probeDuration = (file: string) =>
   Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).toString().trim()) || 0;
@@ -89,6 +90,9 @@ export async function prepareTour(db: SupabaseClient, edit: any, dir: string, lo
   // 5. tomas al ritmo
   const plan = planShots({ clips, beats, bpm, targetSeconds: property.seconds ?? 30 });
   if (!plan.shots.length) throw new Error("Los clips son muy cortos para armar el recorrido");
+  // corrección automática de color por clip
+  const grades = style.grade.auto === false ? undefined : measureClipGrades(source, clips);
+  if (grades?.some((g) => !isNeutral(g))) log(`   color: corrigiendo ${grades.filter((g) => !isNeutral(g)).length} de ${grades.length} clip(s)`);
   const edl: TourEdl = {
     type: "tour",
     fps: 30,
@@ -102,6 +106,7 @@ export async function prepareTour(db: SupabaseClient, edit: any, dir: string, lo
     copy: { headline: copy.headline, highlights: copy.highlights, cta: copy.cta },
     rooms: copy.rooms,
     music: music ? { ...music, volume: style.music?.volume ?? 0.3 } : null,
+    grades,
   };
   log(`   recorrido: ${plan.shots.length} tomas · ${plan.duration.toFixed(1)} s · cuartos: ${copy.rooms.filter(Boolean).join(", ")}`);
   return { edl, styleId: style.id, clips };

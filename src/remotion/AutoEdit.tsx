@@ -18,6 +18,8 @@ import { makeTimeMap } from "../lib/edl/build";
 import { Captions, type OutWord } from "./Captions";
 import { EMOJI_FONT_STACK, useFonts } from "./fonts";
 import { Burst, Callout, EndCard, ImageCard, ImpactLines, LowerThird } from "./Motion";
+import { RoomLabel, SpecCard } from "./TourEdit";
+import { GradeDefs, gradeFilter } from "./Grade";
 
 export type AutoEditProps = {
   src: string;
@@ -92,6 +94,14 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, asse
         .filter((im): im is typeof im & { at: number; url: string } => im.at !== null && !!im.url),
     [edl.images, tm, assetUrls],
   );
+  const overlays = useMemo(
+    () =>
+      (edl.overlays ?? [])
+        .map((o) => ({ ...o, at: tm.toOutSnap(o.at) }))
+        .filter((o): o is typeof o & { at: number } => o.at !== null),
+    [edl.overlays, tm],
+  );
+  const accent = /^#[0-9a-f]{6}/i.test(style.captions.highlightColor) ? style.captions.highlightColor : "#E5C07B";
   const sfx = useMemo(
     () => edl.sfx.map((s) => ({ ...s, at: tm.toOutSnap(s.at) })).filter((s) => s.at !== null) as Edl["sfx"],
     [edl.sfx, tm],
@@ -171,7 +181,7 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, asse
   const lowerFrom = Math.round(((edl.hookTitle?.duration ?? 0) + 0.3) * fps);
   const lowerDur = Math.round(3.2 * fps);
   const endFrom = Math.max(0, durationInFrames - Math.round(2.2 * fps));
-  const showEnd = style.motion.endCard && !!(edl.cta || brand?.handle) && durationInFrames > fps * 6;
+  const showEnd = style.motion.endCard && !!(edl.cta || brand?.handle || edl.endInfo) && durationInFrames > fps * 6;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000", overflow: "hidden" }}>
@@ -188,13 +198,17 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, asse
           const next = i + 1 < edl.segments.length ? Math.round(tm.offsets[i + 1] * fps) : durationInFrames;
           return (
             <Sequence key={i} from={from} durationInFrames={Math.max(1, next - from)} premountFor={fps}>
+              {s.grade ? <GradeDefs id={`grade-${i}`} grade={s.grade} /> : null}
+              <AbsoluteFill style={{ filter: gradeFilter(`grade-${i}`, s.grade) }}>
               <OffthreadVideo
                 src={videoSrc}
                 trimBefore={Math.round(s.start * fps)}
+                playbackRate={s.rate ?? 1}
                 muted={!!s.broll && !!edl.music}
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 pauseWhenBuffering
               />
+              </AbsoluteFill>
             </Sequence>
           );
         })}
@@ -247,6 +261,19 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, asse
         </Sequence>
       ))}
 
+      {/* ── tomas sin voz: nombre, datos y frases ── */}
+      {overlays.map((o, i) => (
+        <Sequence key={`o${i}`} from={Math.round(o.at * fps)} durationInFrames={Math.max(1, Math.round(o.duration * fps))}>
+          {o.kind === "label" ? (
+            <RoomLabel text={o.text} style={style} accent={accent} top={300} />
+          ) : o.kind === "spec" ? (
+            <SpecCard spec={{ icon: o.icon ?? "✨", value: o.value ?? "", label: o.text }} accent={accent} />
+          ) : (
+            <Callout text={o.text} kind={/\d/.test(o.text) ? "number" : "keyword"} style={{ ...style, captions: { ...style.captions, position: "lower" } }} />
+          )}
+        </Sequence>
+      ))}
+
       {/* ── subtítulos ── */}
       <Captions words={words} style={style} />
 
@@ -267,7 +294,7 @@ export const AutoEdit: React.FC<AutoEditProps> = ({ src, edl, style, brand, asse
       {/* ── cierre con llamado a la acción ── */}
       {showEnd ? (
         <Sequence from={endFrom} durationInFrames={durationInFrames - endFrom}>
-          <EndCard cta={edl.cta} handle={brand?.handle} style={style} />
+          <EndCard cta={edl.cta} handle={brand?.handle} style={style} info={edl.endInfo} />
         </Sequence>
       ) : null}
 

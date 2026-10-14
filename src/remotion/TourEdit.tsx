@@ -17,6 +17,10 @@ import type { EditStyle } from "../lib/styles/types";
 import type { Property, TourEdl } from "../lib/tour/types";
 import { useFonts, EMOJI_FONT_STACK } from "./fonts";
 import { Callout, readableOn } from "./Motion";
+import { GradeDefs, gradeFilter } from "./Grade";
+import { specList } from "../lib/tour/specs";
+export { specList };
+import type { ClipGrade } from "../lib/grade-types";
 
 export type TourEditProps = {
   src: string;
@@ -34,19 +38,6 @@ export const calculateTourMetadata: CalculateMetadataFunction<TourEditProps> = (
 });
 
 const OUT = Easing.bezier(0.16, 1, 0.3, 1);
-
-/** Los datos que sí llenaron, con su ícono, en el orden en que conviene contarlos. */
-export function specList(p: Property) {
-  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, ""));
-  const out: { icon: string; value: string; label: string }[] = [];
-  if (p.bedrooms) out.push({ icon: "🛏️", value: fmt(p.bedrooms), label: p.bedrooms === 1 ? "Recámara" : "Recámaras" });
-  if (p.bathrooms) out.push({ icon: "🛁", value: fmt(p.bathrooms), label: p.bathrooms === 1 ? "Baño" : "Baños" });
-  if (p.builtM2) out.push({ icon: "📐", value: `${fmt(p.builtM2)} m²`, label: "Construcción" });
-  if (p.landM2) out.push({ icon: "🌳", value: `${fmt(p.landM2)} m²`, label: "Terreno" });
-  if (p.parking) out.push({ icon: "🚗", value: fmt(p.parking), label: p.parking === 1 ? "Estacionamiento" : "Autos" });
-  if (p.floors) out.push({ icon: "🏠", value: fmt(p.floors), label: p.floors === 1 ? "Planta" : "Plantas" });
-  return out;
-}
 
 export const TourEdit: React.FC<TourEditProps> = ({ src, edl, style, brand, musicUrl }) => {
   const frame = useCurrentFrame();
@@ -81,7 +72,7 @@ export const TourEdit: React.FC<TourEditProps> = ({ src, edl, style, brand, musi
         const dur = Math.max(1, Math.round(s.end * fps) - from);
         return (
           <Sequence key={i} from={from} durationInFrames={dur} premountFor={fps}>
-            <Shot src={videoSrc} srcStart={s.src} move={s.move} style={style} first={i === 0} />
+            <Shot src={videoSrc} srcStart={s.src} move={s.move} style={style} first={i === 0} grade={edl.grades?.[s.clip]} id={`tg-${i}`} />
           </Sequence>
         );
       })}
@@ -149,12 +140,22 @@ export const TourEdit: React.FC<TourEditProps> = ({ src, edl, style, brand, musi
 };
 
 /** Una toma: movimiento lento tipo cámara de cine y entrada según la transición del estilo. */
-const Shot: React.FC<{ src: string; srcStart: number; move: TourEdl["shots"][number]["move"]; style: EditStyle; first: boolean }> = ({
+const Shot: React.FC<{
+  src: string;
+  srcStart: number;
+  move: TourEdl["shots"][number]["move"];
+  style: EditStyle;
+  first: boolean;
+  grade?: ClipGrade;
+  id: string;
+}> = ({
   src,
   srcStart,
   move,
   style,
   first,
+  grade,
+  id,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -185,7 +186,17 @@ const Shot: React.FC<{ src: string; srcStart: number; move: TourEdl["shots"][num
   return (
     <AbsoluteFill>
       <AbsoluteFill style={{ transform: `${enter} ${transform}`, opacity, filter }}>
-        <OffthreadVideo src={src} trimBefore={Math.round(srcStart * fps)} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} pauseWhenBuffering />
+        {grade ? <GradeDefs id={id} grade={grade} /> : null}
+        <AbsoluteFill style={{ filter: gradeFilter(id, grade) }}>
+          <OffthreadVideo
+            src={src}
+            trimBefore={Math.round(srcStart * fps)}
+            playbackRate={Math.max(0.4, Math.min(1, style.pacing.brollSpeed ?? 1))}
+            muted
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            pauseWhenBuffering
+          />
+        </AbsoluteFill>
       </AbsoluteFill>
       {flash ? <AbsoluteFill style={{ background: "#fff", opacity: flash }} /> : null}
     </AbsoluteFill>
@@ -230,21 +241,21 @@ const Intro: React.FC<{ p: Property; headline: string; style: EditStyle; accent:
   );
 };
 
-const RoomLabel: React.FC<{ text: string; style: EditStyle; accent: string }> = ({ text, style, accent }) => {
+export const RoomLabel: React.FC<{ text: string; style: EditStyle; accent: string; top?: number }> = ({ text, style, accent, top = 120 }) => {
   const frame = useCurrentFrame();
   const { fps, width, durationInFrames } = useVideoConfig();
   const k = width / 1080;
   const a = spring({ frame, fps, config: { damping: 18, stiffness: 160 } });
   const out = interpolate(frame, [durationInFrames - 5, durationInFrames], [1, 0], { extrapolateLeft: "clamp" });
   return (
-    <div style={{ position: "absolute", top: 120 * k, left: 60 * k, display: "flex", alignItems: "center", gap: 14 * k, opacity: out, transform: `translateX(${(1 - a) * -40}px)` }}>
+    <div style={{ position: "absolute", top: top * k, left: 60 * k, display: "flex", alignItems: "center", gap: 14 * k, opacity: out, transform: `translateX(${(1 - a) * -40}px)` }}>
       <span style={{ width: 6 * k, height: 54 * k, background: accent, borderRadius: 4 }} />
       <span style={{ fontFamily: `"${style.overlays.hookTitleFont}", serif`, fontWeight: 700, fontSize: 52 * k, color: "#fff", textShadow: "0 4px 18px rgba(0,0,0,0.6)", opacity: a }}>{text}</span>
     </div>
   );
 };
 
-const SpecCard: React.FC<{ spec: { icon: string; value: string; label: string }; accent: string }> = ({ spec, accent }) => {
+export const SpecCard: React.FC<{ spec: { icon: string; value: string; label: string }; accent: string }> = ({ spec, accent }) => {
   const frame = useCurrentFrame();
   const { fps, width, height, durationInFrames } = useVideoConfig();
   const k = width / 1080;

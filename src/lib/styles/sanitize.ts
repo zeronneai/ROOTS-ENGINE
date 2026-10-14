@@ -52,7 +52,8 @@ export function sanitizeOverrides(input: unknown): StyleOverrides {
         : undefined,
     }),
     sfx: clean({ enabled: bool(s.enabled), volume: num(s.volume, 0, 1) }),
-    grade: clean({ filter: typeof g.filter === "string" && FILTER.test(g.filter) ? g.filter : undefined }),
+    grade: clean({ filter: typeof g.filter === "string" && FILTER.test(g.filter) ? g.filter : undefined, auto: bool(g.auto) }),
+    pacing: clean({ brollSpeed: num(isObj(input.pacing) ? input.pacing.brollSpeed : undefined, 0.4, 1) }),
     zoom: clean({ enabled: bool(z.enabled), intensity: num(z.intensity, 1, 1.4), everySeconds: num(z.everySeconds, 1, 15) }),
     overlays: clean({
       progressColor: hex(o.progressColor),

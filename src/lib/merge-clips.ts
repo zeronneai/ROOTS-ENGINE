@@ -30,12 +30,20 @@ export function mergeClips(files: string[], dir: string): { file: string; clips:
   files.forEach((f, i) => {
     const out = path.join(dir, `part-${i}.mp4`);
     const audio = hasAudio(f);
+    const s = size(f);
+    // encuadre: si el clip viene en otra orientación (horizontal en un video vertical), no lo recortamos;
+    // va completo al centro sobre una versión desenfocada de sí mismo, así no se corta a la persona ni el lugar
+    const mismatch = (s.h >= s.w) !== vertical;
+    const video = mismatch
+      ? `[0:v]split[a][b];[a]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=28:2,eq=brightness=-0.06[bg];` +
+        `[b]scale=${W}:${H}:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1,fps=30,format=yuv420p[v]`
+      : `[0:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=30,format=yuv420p[v]`;
     const args = ["-v", "error", "-y", "-i", f];
     if (!audio) args.push("-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo");
     args.push(
-      "-vf",
-      `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=30,format=yuv420p`,
-      "-map", "0:v:0",
+      "-filter_complex",
+      video,
+      "-map", "[v]",
       "-map", audio ? "0:a:0" : "1:a:0",
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-maxrate", "4500k", "-bufsize", "9000k",
       "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",

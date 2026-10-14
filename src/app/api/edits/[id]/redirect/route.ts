@@ -46,6 +46,8 @@ export const POST = editRoute(async ({ edit, body, db }) => {
   direction.music = chooseMusic({ mode: musicMode, musicId, tracks, aiPick: direction.musicTrack, style });
   direction.broll = detectBroll(edit.transcript.words, edit.transcript.clips, edit.clip_modes ?? []);
   direction.brollShot = edit.transcript.direction?.brollShot;
+  direction.grades = edit.transcript.grades;
+  direction.brollCopy = edit.transcript.brollCopy;
   const edl = buildEdl({ words: edit.transcript.words, sourceDuration: edit.transcript.duration, style, direction });
   await db
     .from("edits")
