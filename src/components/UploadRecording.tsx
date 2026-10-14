@@ -4,9 +4,10 @@ import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { registerRecordingAction } from "@/app/actions";
 import { Spinner } from "./ApiButton";
-import { PropertyFields } from "./tour/PropertyFields";
+import { CinematicFields, PropertyFields } from "./tour/PropertyFields";
 import { MusicPicker, type MusicChoice, type TrackOpt } from "./music/MusicPicker";
 import type { Property } from "@/lib/tour/types";
+import { compressIfNeeded, MAX_UPLOAD_MB } from "@/lib/compress-video";
 
 type IdeaOpt = { id: string; title: string };
 
@@ -16,9 +17,10 @@ export function UploadRecording(props: {
   defaultIdea?: string | null;
   modes: ("auto" | "agency")[];
   tracks?: TrackOpt[];
-  /** inmobiliarias: arranca en modo recorrido */
-  defaultKind?: "talk" | "tour";
+  /** inmobiliarias: "Recorrido" con datos de la propiedad; los demás giros: "Cinemático" */
+  realEstate?: boolean;
 }) {
+  const RE = !!props.realEstate;
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState("");
@@ -26,7 +28,7 @@ export function UploadRecording(props: {
   const [idea, setIdea] = useState(props.defaultIdea ?? "");
   const [mode, setMode] = useState<"auto" | "agency">(props.modes[0] ?? "auto");
   const [notes, setNotes] = useState("");
-  const [kind, setKind] = useState<"talk" | "tour">(props.defaultKind ?? "talk");
+  const [kind, setKind] = useState<"talk" | "tour">(RE ? "tour" : "talk");
   const [property, setProperty] = useState<Property>({});
   const [rooms, setRooms] = useState<string[]>([]);
   const [seconds, setSeconds] = useState(30);
@@ -51,7 +53,10 @@ export function UploadRecording(props: {
     setErr(null);
     try {
       const paths: string[] = [];
-      for (const [i, file] of files.entries()) {
+      for (const [i, original] of files.entries()) {
+        const label = files.length > 1 ? ` clip ${i + 1} de ${files.length}` : "";
+        // si pasa del límite de Supabase, se comprime aquí mismo antes de subir
+        const file = await compressIfNeeded(original, (p) => setProgress(`Comprimiendo${label}: ${Math.round(p * 100)}%`));
         setProgress(files.length > 1 ? `Subiendo clip ${i + 1} de ${files.length}...` : "Subiendo...");
         const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
         const path = `${props.clientId}/${crypto.randomUUID()}.${ext}`;
@@ -78,7 +83,10 @@ export function UploadRecording(props: {
         notes,
         assets,
         kind: mode === "auto" ? kind : "talk",
-        property: kind === "tour" && mode === "auto" ? { ...property, rooms: files.map((_, i) => rooms[i] ?? ""), seconds } : null,
+        property:
+          kind === "tour" && mode === "auto"
+            ? { ...property, rooms: files.map((_, i) => rooms[i] ?? ""), seconds, variant: RE ? "realestate" : "cinematic" }
+            : null,
         musicMode: music.mode,
         musicId: music.id,
       });
@@ -102,8 +110,10 @@ export function UploadRecording(props: {
         <div className="grid grid-cols-2 gap-2">
           {(
             [
-              ["talk", "🎙️ Hablado", "Alguien habla a cámara. Corta por la voz."],
-              ["tour", "🏠 Recorrido", "Tomas con música, cortes al ritmo y datos animados."],
+              ["talk", "🎙️ Hablado", "Alguien habla a cámara. Corta por la voz."] as const,
+              RE
+                ? (["tour", "🏠 Recorrido", "Tomas de la propiedad con música, cortes al ritmo y datos animados."] as const)
+                : (["tour", "🎬 Cinemático", "Sin voz: tomas con música y cortes al ritmo. Comida, productos, lugares, eventos."] as const),
             ] as const
           ).map(([k, t, d]) => (
             <button
@@ -128,12 +138,14 @@ export function UploadRecording(props: {
                   className="input !py-1 min-w-0 flex-1 text-sm"
                   value={rooms[i] ?? ""}
                   onChange={(e) => setRooms(Object.assign([...rooms], { [i]: e.target.value }))}
-                  placeholder={`${f.name.slice(0, 18)} · ¿qué es? (la IA lo adivina)`}
+                  placeholder={`${f.name.slice(0, 18)} · ${RE ? "¿qué cuarto es?" : "¿qué se ve?"} (la IA lo adivina)`}
                 />
               ) : (
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>
               )}
-              <span className="shrink-0 text-xs text-muted">{(f.size / 1e6).toFixed(0)} MB</span>
+              <span className={`shrink-0 text-xs ${f.size > MAX_UPLOAD_MB * 9e5 ? "text-warn" : "text-muted"}`} title={f.size > MAX_UPLOAD_MB * 9e5 ? "Se va a comprimir antes de subir" : undefined}>
+                {(f.size / 1e6).toFixed(0)} MB{f.size > MAX_UPLOAD_MB * 9e5 ? " · se comprime" : ""}
+              </span>
               <button type="button" className="px-1 text-muted disabled:opacity-30" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Subir">↑</button>
               <button type="button" className="px-1 text-muted disabled:opacity-30" disabled={i === files.length - 1} onClick={() => move(i, 1)} aria-label="Bajar">↓</button>
               <button
@@ -166,7 +178,9 @@ export function UploadRecording(props: {
         {files.length
           ? "+ Agregar otro clip"
           : kind === "tour"
-            ? "Toca para escoger los clips del recorrido (uno por cuarto o zona)"
+            ? RE
+              ? "Toca para escoger los clips del recorrido (uno por cuarto o zona)"
+              : "Toca para escoger tus tomas (platillos, producto, lugar, ambiente...)"
             : "Toca para escoger el video (puedes elegir varios clips)"}
       </label>
       {files.length > 1 && kind === "talk" ? (
@@ -174,11 +188,23 @@ export function UploadRecording(props: {
       ) : null}
       {kind === "tour" && mode === "auto" ? (
         <div className="space-y-4 rounded-2xl border border-line bg-cream/60 p-4">
-          <div>
-            <div className="font-semibold">Datos de la propiedad</div>
-            <p className="text-xs text-muted">Salen animados en el video. Lo que no llenes no aparece. La IA nunca inventa precios ni medidas.</p>
-          </div>
-          <PropertyFields value={property} onChange={setProperty} />
+          {RE ? (
+            <>
+              <div>
+                <div className="font-semibold">Datos de la propiedad</div>
+                <p className="text-xs text-muted">Salen animados en el video. Lo que no llenes no aparece. La IA nunca inventa precios ni medidas.</p>
+              </div>
+              <PropertyFields value={property} onChange={setProperty} />
+            </>
+          ) : (
+            <>
+              <div>
+                <div className="font-semibold">Textos del video (opcional)</div>
+                <p className="text-xs text-muted">Lo que no llenes lo propone la IA según lo que ve. Nunca inventa precios ni promos.</p>
+              </div>
+              <CinematicFields value={property} onChange={setProperty} />
+            </>
+          )}
           <div>
             <div className="label mb-1.5">Duración</div>
             <div className="flex gap-2">

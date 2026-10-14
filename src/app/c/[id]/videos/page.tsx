@@ -7,6 +7,7 @@ import { retryEditAction } from "@/app/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LiveEdits } from "@/components/LiveEdits";
 import { loadTracks } from "@/lib/music";
+import { isRealEstateNiche } from "@/lib/tour/types";
 
 const EDIT_STATUS: Record<string, { l: string; c: string }> = {
   queued: { l: "En fila", c: "text-muted" },
@@ -71,7 +72,7 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold">{e.content_ideas?.title ?? e.recordings?.original_name}</div>
                     <div className="text-xs text-muted">
-                      {fmtDateTime(e.created_at)} · {e.mode === "auto" ? (e.kind === "tour" ? "Recorrido" : "Auto-edición") : "Equipo PRA"}
+                      {fmtDateTime(e.created_at)} · {e.mode === "auto" ? (e.kind === "tour" ? (e.property?.variant === "cinematic" ? "Cinemático" : "Recorrido") : "Auto-edición") : "Equipo PRA"}
                     </div>
                     {e.error ? <div className="mt-1 text-xs text-bad">{e.error}</div> : null}
                   </div>
@@ -96,7 +97,7 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
               defaultIdea={idea}
               modes={modes}
               tracks={trackOpts}
-              defaultKind={client.niche === "inmobiliaria" ? "tour" : "talk"}
+              realEstate={isRealEstateNiche(client.niche)}
             />
           ) : (
             <div className="card p-5 text-sm text-muted">

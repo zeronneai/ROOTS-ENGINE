@@ -23,6 +23,7 @@
     "@remotion/player": "^4.0.535",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.3",
+    "mediabunny": "1.59.1",
     "next": "16.4.0",
     "openai": "^7.32.0",
     "react": "19.3.0",

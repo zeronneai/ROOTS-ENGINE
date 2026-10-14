@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { TourEdit } from "@/remotion/TourEdit";
 import type { Property, TourEdl } from "@/lib/tour/types";
 import type { EditStyle } from "@/lib/styles/types";
-import { PropertyFields } from "./PropertyFields";
+import { CinematicFields, PropertyFields } from "./PropertyFields";
 import { MusicPicker, type MusicChoice } from "../music/MusicPicker";
 import { Spinner } from "../ApiButton";
 
@@ -33,6 +33,7 @@ export function TourReview(props: {
   const [err, setErr] = useState<string | null>(null);
 
   const property = (edl.property ?? {}) as Property;
+  const RE = property.variant !== "cinematic";
   const setProperty = (p: Property) => setEdl((e) => ({ ...e, property: p }));
   const musicUrl = edl.music ? tracks.find((t) => t.path === edl.music!.path)?.url ?? null : null;
   const musicChanged = music.mode === "track" && tracks.find((t) => t.id === music.id)?.path !== edl.music?.path;
@@ -57,7 +58,7 @@ export function TourReview(props: {
           ? props.isAgency
             ? "Mandado a exportar. La compu con el worker lo renderiza y aquí aparece el MP4 al terminar."
             : "¡Listo! Tu video se está exportando. En unos minutos aparece aquí para descargarlo."
-          : "Rehaciendo el recorrido con la canción y los datos nuevos. En unos minutos se actualiza esta página.",
+          : "Rehaciendo el video con la canción y los datos nuevos. En unos minutos se actualiza esta página.",
       );
       router.refresh();
     } catch (e) {
@@ -102,7 +103,7 @@ export function TourReview(props: {
           />
           <input className="input" value={edl.copy.cta} onChange={(e) => setEdl({ ...edl, copy: { ...edl.copy, cta: e.target.value } })} placeholder="Cierre (ej: Agenda tu visita)" />
           <div>
-            <div className="label mb-1.5">Nombre de cada clip</div>
+            <div className="label mb-1.5">{RE ? "Nombre de cada cuarto" : "Texto de cada toma (vacío = sin texto)"}</div>
             <div className="grid gap-2 sm:grid-cols-2">
               {edl.rooms.map((r, i) => (
                 <input
@@ -118,8 +119,8 @@ export function TourReview(props: {
         </div>
 
         <div className="card space-y-3 p-5">
-          <div className="font-semibold">Datos de la propiedad</div>
-          <PropertyFields value={property} onChange={setProperty} />
+          <div className="font-semibold">{RE ? "Datos de la propiedad" : "Promo, ubicación y contacto"}</div>
+          {RE ? <PropertyFields value={property} onChange={setProperty} /> : <CinematicFields value={property} onChange={setProperty} />}
         </div>
 
         <div className="card space-y-3 p-5">
@@ -134,16 +135,16 @@ export function TourReview(props: {
               setMusic(v);
             }}
           />
-          {musicChanged ? <p className="text-xs text-warn">Para cambiar la canción hay que rehacer el recorrido, así los cortes caen en el ritmo nuevo.</p> : null}
+          {musicChanged ? <p className="text-xs text-warn">Para cambiar la canción hay que rehacer el video, así los cortes caen en el ritmo nuevo.</p> : null}
           <div>
             <div className="label mb-1">Instrucciones extra (opcional)</div>
-            <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: que se sienta de lujo, empieza con la alberca" />
+            <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={RE ? "Ej: que se sienta de lujo, empieza con la alberca" : "Ej: que se sienta antojable, empieza con el platillo estrella"} />
           </div>
         </div>
 
         <div className="card flex flex-wrap items-center gap-3 p-4">
           <button className="btn btn-ghost" disabled={!!busy} onClick={() => call("rebuild")}>
-            {busy === "rebuild" ? <Spinner /> : "↻"} Rehacer recorrido
+            {busy === "rebuild" ? <Spinner /> : "↻"} {RE ? "Rehacer recorrido" : "Rehacer video"}
           </button>
           {props.canApprove ? (
             <button className="btn btn-primary" disabled={!!busy || musicChanged} onClick={() => call("approve")}>
@@ -153,7 +154,7 @@ export function TourReview(props: {
           {err ? <span className="text-xs text-bad">{err}</span> : null}
           {msg ? <p className="w-full rounded-xl bg-sun/40 px-3 py-2 text-sm">{msg}</p> : null}
           <p className="w-full text-xs text-muted">
-            Los textos, datos y nombres se ven al instante en la vista previa. “Rehacer” vuelve a armar las tomas (para otra canción o
+            Los textos y datos se ven al instante en la vista previa. “Rehacer” vuelve a armar las tomas (para otra canción o
             instrucciones nuevas).
           </p>
         </div>

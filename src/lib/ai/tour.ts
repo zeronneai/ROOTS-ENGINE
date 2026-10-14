@@ -24,21 +24,28 @@ export async function tourCopy(opts: {
   tracks: { title: string; moods: string[]; energy: number; own: boolean }[];
 }) {
   const given = (opts.property.rooms ?? []).map((r) => r || null);
+  const cinematic = opts.property.variant === "cinematic";
   const ask = (withFrames: boolean) =>
     structured({
-      label: "Recorrido: cuartos y textos",
+      label: cinematic ? "Cinemático: escenas y textos" : "Recorrido: cuartos y textos",
       schema: TourCopySchema,
       maxTokens: 1500,
       images: withFrames ? opts.frames : undefined,
       system: `${AGENCY_CONTEXT}
 
-You direct a real estate property tour video for Instagram and TikTok (vertical, music, beat-synced cuts, animated property data).
+${
+  cinematic
+    ? `You direct a cinematic short video for Instagram and TikTok for this business (vertical, no one talking, music, beat-synced cuts, animated text). It can be food, products, a place, an event or a service.
+You get one frame per clip, in order (if attached). Name what each clip shows in Spanish, 1 to 3 words, in the business's own terms (ej: Tacos al pastor, Barra, Corte fade, Nuevo menú, Ambiente). Leave it empty ("") if a label would add nothing. If a name was given by the user for a clip, keep it.
+Write a short punchy headline and 2 to 4 highlights in Spanish (Mexican, casual, fitting the brand), based ONLY on the user data, notes and what you can see. Never invent prices, promos, dates or addresses.`
+    : `You direct a real estate property tour video for Instagram and TikTok (vertical, music, beat-synced cuts, animated property data).
 You get one frame per clip, in order (if attached). Name what each clip shows in Spanish, 1 to 3 words (Fachada, Sala, Cocina, Recámara principal, Baño, Jardín, Alberca, Terraza, Cochera, Vista, Estudio...). If a name was given by the user for a clip, keep it.
-Write a short headline and 2 to 4 highlights in Spanish (Mexican, real estate tone, premium but clear), based ONLY on the property data, the user notes and what you can see. Never invent prices, sizes, numbers, distances or addresses.
+Write a short headline and 2 to 4 highlights in Spanish (Mexican, real estate tone, premium but clear), based ONLY on the property data, the user notes and what you can see. Never invent prices, sizes, numbers, distances or addresses.`
+}
 ${opts.tracks.length ? "Pick the song that best fits (luxury: calm and elegant; family or modern: upbeat; rentals for young people: energetic)." : "musicTrack: null."}
 No em dashes or long dashes.`,
       user: `AGENCY: ${json({ name: opts.client.name, city: opts.client.city, tone: opts.brand.voice?.tone })}
-PROPERTY DATA: ${json(opts.property)}
+${cinematic ? "VIDEO DATA" : "PROPERTY DATA"}: ${json(opts.property)}
 USER NOTES: ${json(opts.notes ?? null)}
 CLIPS: ${opts.frames.length} (names given by the user, null = you decide): ${json(given)}
 ${opts.tracks.length ? `SONGS (numbered from 0, energy -2 calm to 2 intense): ${json(opts.tracks.map((t, i) => ({ number: i, ...t })))}` : ""}`,
@@ -53,7 +60,7 @@ ${opts.tracks.length ? `SONGS (numbered from 0, energy -2 calm to 2 intense): ${
     rooms: Array.from({ length: n }, (_, i) => given[i] || out.rooms[i] || ""),
     headline: opts.property.title || out.headline,
     highlights: out.highlights.slice(0, 4),
-    cta: opts.property.cta || out.cta,
+    cta: opts.property.cta || out.cta || (cinematic ? "Visítanos" : "Agenda tu visita"),
     musicTrack: out.musicTrack != null && opts.tracks[out.musicTrack] ? out.musicTrack : null,
   };
 }

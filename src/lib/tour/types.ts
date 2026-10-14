@@ -18,10 +18,14 @@ export const PropertySchema = z.object({
   cta: z.string().nullable().optional(), // "Agenda tu visita"
   rooms: z.array(z.string()).nullable().optional(), // nombre de cada clip en orden: "Fachada", "Cocina"...
   seconds: z.number().nullable().optional(), // duración deseada del video
+  /** realestate = recorrido de propiedad (con datos); cinematic = tomas con música para cualquier giro */
+  variant: z.enum(["realestate", "cinematic"]).nullable().optional(),
 });
 export type Property = z.infer<typeof PropertySchema>;
 
 /** Limpia lo que llega del navegador. */
+export const isRealEstateNiche = (niche: string | null | undefined) => niche === "inmobiliaria";
+
 export function cleanProperty(input: unknown): Property {
   const o = (typeof input === "object" && input ? input : {}) as Record<string, unknown>;
   const str = (v: unknown, max = 80) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -49,6 +53,7 @@ export function cleanProperty(input: unknown): Property {
     cta: str(o.cta, 40),
     rooms: Array.isArray(o.rooms) ? o.rooms.map((x) => str(x, 30) ?? "").slice(0, 20) : null,
     seconds: [15, 30, 45, 60].includes(Number(o.seconds)) ? Number(o.seconds) : null,
+    variant: o.variant === "cinematic" ? "cinematic" : "realestate",
   };
 }
 

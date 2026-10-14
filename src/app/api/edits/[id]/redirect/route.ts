@@ -29,7 +29,7 @@ export const POST = editRoute(async ({ edit, body, db }) => {
   }
   const style = styleForClient(ctx, { presetId: styleId, moodId, edit: overrides });
   const idea = edit.content_ideas ? { title: edit.content_ideas.title, hooks: edit.content_ideas.hooks } : null;
-  if (edit.kind === "tour") throw new Error("Para recorridos usa “Rehacer recorrido”");
+  if (edit.kind === "tour") throw new Error("Para este tipo de video usa “Rehacer video”");
   const tracks = await loadTracks(db, edit.client_id);
   const direction = await directEdit({
     words: edit.transcript.words,
