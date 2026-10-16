@@ -213,6 +213,15 @@ export async function setIdeaStatusAction(clientId: string, ideaId: string, stat
   await requireClientAccess(clientId);
   await supabaseAdmin().from("content_ideas").update({ status }).eq("id", ideaId).eq("client_id", clientId);
   revalidatePath(`/c/${clientId}/plan`);
+  revalidatePath(`/c/${clientId}/campanas`, "layout");
+}
+
+/** Borra una campaña con sus ideas. */
+export async function deleteCampaignAction(clientId: string, planId: string) {
+  const viewer = await requireClientAccess(clientId);
+  if (viewer.role !== "agency") throw new Error("Solo la agencia");
+  await supabaseAdmin().from("content_plans").delete().eq("id", planId).eq("client_id", clientId).eq("kind", "campaign");
+  revalidatePath(`/c/${clientId}/campanas`, "layout");
 }
 
 // ───────────────────────────── Videos ─────────────────────────────
