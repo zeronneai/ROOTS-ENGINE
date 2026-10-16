@@ -193,7 +193,7 @@ export function CampaignForm({ clientId, suggestions }: { clientId: string; sugg
 
       <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
         <label className="block space-y-1">
-          <span className="label">Cuántas ideas</span>
+          <span className="label">Videos o posts en total</span>
           <input type="number" min={2} max={20} className="input" value={d.count} onChange={(e) => set({ count: Number(e.target.value) })} />
         </label>
         <label className="block space-y-1">
