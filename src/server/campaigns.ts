@@ -26,7 +26,8 @@ export function cleanBrief(body: Record<string, unknown>): CampaignBrief {
   if (dateTo < dateFrom) [dateFrom, dateTo] = [dateTo, dateFrom];
   const days = (Date.parse(dateTo) - Date.parse(dateFrom)) / 864e5;
   if (days > 92) throw new Error("La campaña puede durar máximo 3 meses");
-  if (!events.length && !str(body.goal, 10) && !str(body.notes, 10)) throw new Error("Agrega al menos un evento o cuéntanos de qué se trata");
+  const rawList = str(body.rawList, 8000);
+  if (!events.length && !rawList && !str(body.goal, 10) && !str(body.notes, 10)) throw new Error("Pega la lista de eventos o cuéntanos de qué se trata");
   const tones = (Array.isArray(body.tones) ? body.tones : []).filter((t): t is Tone => typeof t === "string" && t in TONES);
   return {
     name,
@@ -38,6 +39,7 @@ export function cleanBrief(body: Record<string, unknown>): CampaignBrief {
     count: Math.max(2, Math.min(20, Math.round(Number(body.count) || 6))),
     notes: str(body.notes, 1500),
     canRecord: str(body.canRecord, 400),
+    rawList,
   };
 }
 

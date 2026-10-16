@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Spinner } from "../ApiButton";
 
 type Ev = { date: string; name: string; details: string };
-type Draft = { name: string; goal: string; dateFrom: string; dateTo: string; events: Ev[]; tones: string[]; count: number; notes: string; canRecord: string };
+type Draft = { name: string; goal: string; dateFrom: string; dateTo: string; events: Ev[]; tones: string[]; count: number; notes: string; canRecord: string; rawList: string };
 
 const TONES: [string, string][] = [
   ["comedia", "😂 Comedia"],
@@ -16,7 +16,7 @@ const TONES: [string, string][] = [
 ];
 
 const today = () => new Date().toISOString().slice(0, 10);
-const empty = (): Draft => ({ name: "", goal: "", dateFrom: today(), dateTo: "", events: [{ date: "", name: "", details: "" }], tones: ["comedia", "viral", "creativo"], count: 6, notes: "", canRecord: "" });
+const empty = (): Draft => ({ name: "", goal: "", dateFrom: today(), dateTo: "", events: [{ date: "", name: "", details: "" }], tones: ["comedia", "viral", "creativo"], count: 6, notes: "", canRecord: "", rawList: "" });
 
 /** Formulario de campaña: fechas, eventos y tono. Guarda borrador para no perder lo escrito. */
 export function CampaignForm({ clientId, suggestions }: { clientId: string; suggestions: { date: string; name: string }[] }) {
@@ -25,6 +25,8 @@ export function CampaignForm({ clientId, suggestions }: { clientId: string; sugg
   const [d, setD] = useState<Draft>(empty);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const [readMsg, setReadMsg] = useState<string | null>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -54,6 +56,36 @@ export function CampaignForm({ clientId, suggestions }: { clientId: string; sugg
     set({ events: [...events, { date: s.date, name: s.name, details: "" }].sort((a, b) => a.date.localeCompare(b.date)) });
   };
 
+  /** La IA lee la lista pegada y llena los eventos (luego se pueden corregir). */
+  async function readList() {
+    setReading(true);
+    setReadMsg(null);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/campaigns/parse`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: d.rawList }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Error");
+      const r = j.result as { name: string; dateFrom: string | null; dateTo: string | null; events: { date: string | null; name: string; details: string | null }[] };
+      const events = r.events.map((e) => ({ date: e.date ?? "", name: e.name, details: e.details ?? "" }));
+      set({
+        name: d.name.trim() || r.name,
+        dateFrom: r.dateFrom ?? d.dateFrom,
+        dateTo: r.dateTo ?? d.dateTo,
+        events: events.length ? events : d.events,
+        count: Math.max(d.count, Math.min(20, events.length + 3)),
+      });
+      setReadMsg(`Encontré ${events.length} evento${events.length === 1 ? "" : "s"}. Revisa abajo que las fechas estén bien.`);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setReading(false);
+    }
+  }
+
   async function submit() {
     setBusy(true);
     setErr(null);
@@ -81,7 +113,24 @@ export function CampaignForm({ clientId, suggestions }: { clientId: string; sugg
     <div className="card space-y-5 p-5">
       <div>
         <div className="font-semibold">Nueva campaña</div>
-        <p className="text-xs text-muted">Dinos qué viene (eventos, fechas, lanzamientos) y la IA arma el análisis y las ideas de contenido para esas fechas.</p>
+        <p className="text-xs text-muted">Pega la lista de lo que viene (eventos, fechas, lanzamientos) y la IA arma el análisis de toda la campaña y las ideas de contenido.</p>
+      </div>
+
+      <div className="space-y-2 rounded-xl border border-purple/40 bg-cream/60 p-3">
+        <div className="label">Pega la lista de eventos tal cual</div>
+        <textarea
+          rows={7}
+          className="input"
+          value={d.rawList}
+          onChange={(e) => set({ rawList: e.target.value })}
+          placeholder={"Pega aquí lo que te mandaron por WhatsApp o correo, en el formato que sea. Ej:\n\nSáb 25 oct: pop up en el rodeo de Socorro, 10am a 6pm\n31 oct: Halloween, concurso de disfraces con sombrero\n8 y 9 nov: feria vaquera en el Coliseo, llevamos el hat bar\nBlack Friday: 20% en sombreros personalizados"}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="btn btn-primary" disabled={reading || d.rawList.trim().length < 5} onClick={readList}>
+            {reading ? <><Spinner /> Leyendo...</> : "Leer lista"}
+          </button>
+          <span className="text-xs text-muted">{readMsg ?? "La IA saca las fechas y los eventos y los acomoda abajo. Si prefieres, también puedes crear la campaña directo con la lista."}</span>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -104,7 +153,7 @@ export function CampaignForm({ clientId, suggestions }: { clientId: string; sugg
       </div>
 
       <div className="space-y-2">
-        <div className="label">Eventos y fechas</div>
+        <div className="label">Eventos y fechas {d.events.filter((e) => e.name).length ? `(${d.events.filter((e) => e.name).length})` : ""}</div>
         {d.events.map((e, i) => (
           <div key={i} className="grid gap-2 rounded-xl border border-line p-3 sm:grid-cols-[150px_1fr_auto]">
             <input type="date" className="input" value={e.date} onChange={(x) => setEv(i, { date: x.target.value })} />

@@ -25,7 +25,7 @@ export default async function CampaignsPage({ params }: { params: Promise<{ id: 
         Para fechas y eventos en particular: un pop up, un lanzamiento, Halloween, una feria. Le das las fechas y la IA arma el análisis y las ideas
         (comedia, trends, cinemático) listas para grabar.
       </p>
-      <div className="grid gap-8 xl:grid-cols-[1fr_380px]">
+      <div className="grid gap-8 xl:grid-cols-[1fr_460px]">
         <section className="space-y-3">
           {!campaigns?.length ? (
             <Empty title="Sin campañas todavía">{isAgency ? "Crea la primera con el formulario." : "Tu equipo de Purple Roots está preparando tus campañas."}</Empty>

@@ -24,6 +24,8 @@ export type CampaignBrief = {
   count: number;
   notes: string | null;
   canRecord: string | null;
+  /** la lista tal cual la pegaron (de WhatsApp, correo, notas) */
+  rawList: string | null;
 };
 
 const IdeaSchema = z.object({
@@ -82,6 +84,8 @@ The client asked for a CAMPAIGN around specific dates and events, not a generic 
 Rules:
 - Exactly ${b.count} ideas, all dated between ${b.dateFrom} and ${b.dateTo} (YYYY-MM-DD). Put warm-up content before each event, the strongest piece on or right before the event day, and a recap or follow-up after when it makes sense.
 - Each idea belongs to one of the requested tones: ${b.tones.join(", ")}. Spread them; comedy and viral ideas must have a real joke, twist or relatable situation, not just "fun video".
+- Think of the campaign AS A WHOLE first (one concept, one look, recurring jokes or characters across all events), then the pieces. Include some umbrella ideas that promote the whole season or all the events together (event: null), not only one idea per event.
+- If the brief has a pasted list (rawList), read every event, date and detail in it; it is the main source.
 - Ideas must be specific to THIS business and THESE events. Use the brand's real products, place, people, slang and city. No generic "show your product" ideas.
 - Comedy: think situations the audience lives (the customer who can't decide, the friend who always arrives late, mom's reaction, the boyfriend waiting outside). Use characters and exaggeration. The punchline must land in under 15 seconds.
 - Viral/trend: describe the format so it can be adapted to whatever audio is trending; don't name a specific song.
@@ -111,5 +115,32 @@ ${json(opts.research)}
 
 WINNING POSTS FROM COMPETITORS
 ${json(opts.winners)}`,
+  });
+}
+
+const ParsedSchema = z.object({
+  name: z.string().describe("Nombre corto para la campaña, ej: Temporada de rodeos y Halloween"),
+  dateFrom: z.string().nullable().describe("YYYY-MM-DD del primer evento"),
+  dateTo: z.string().nullable().describe("YYYY-MM-DD del último evento"),
+  events: z.array(
+    z.object({
+      date: z.string().nullable().describe("YYYY-MM-DD; si no dicen el año, el próximo que viene desde hoy; null si no hay fecha"),
+      name: z.string().describe("Nombre corto del evento"),
+      details: z.string().nullable().describe("Lugar, horario y todo lo demás que dice la lista sobre ese evento, sin inventar"),
+    }),
+  ),
+});
+
+/** Convierte una lista pegada (WhatsApp, correo, notas) en eventos con fecha. */
+export async function parseEventList(text: string, today: string) {
+  return structured({
+    label: "Campaña: leer lista",
+    schema: ParsedSchema,
+    maxTokens: 4000,
+    system: `You turn a pasted list of upcoming events (from WhatsApp, email or notes, in Spanish or English, any format) into structured events.
+Today is ${today}. Dates like "sáb 25", "Nov 2", "2/11" or "este viernes" must become YYYY-MM-DD in the next occurrence from today (Mexican format is day/month unless clearly US).
+One item per event. If an event spans several days, use the first day and put the range in details. Keep every detail the list gives (place, time, what to bring, promos) in details, without inventing anything.
+Write names and details in the same language as the list. No em dashes or long dashes.`,
+    user: text.slice(0, 8000),
   });
 }
