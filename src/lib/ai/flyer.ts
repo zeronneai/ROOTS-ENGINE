@@ -100,7 +100,7 @@ IMAGES: ${json(manifest)}`,
 }
 
 /** Genera la imagen con Nano Banana. Regresa PNG/JPEG en Buffer. */
-export async function renderFlyer(opts: { prompt: string; texts: string[]; format: FlyerFormat; images: RefImage[] }) {
+export async function renderFlyer(opts: { prompt: string; texts: string[]; format: FlyerFormat; images: RefImage[]; label?: string }) {
   if (!process.env.GEMINI_API_KEY) throw new Error("Falta GEMINI_API_KEY (Google AI Studio) en las variables de Vercel");
   const { GoogleGenAI } = await import("@google/genai");
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -108,9 +108,8 @@ export async function renderFlyer(opts: { prompt: string; texts: string[]; forma
   const parts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[] = [
     {
       text: `${opts.prompt}
-
-Exact text to place on the flyer (spell it exactly, keep the accents): ${opts.texts.map((t) => `"${t}"`).join(", ")}.
-The reference images follow, each one introduced by its role.`,
+${opts.texts.length ? `\nExact text to place in the image (spell it exactly, keep the accents): ${opts.texts.map((t) => `"${t}"`).join(", ")}.` : ""}
+${opts.images.length ? "The reference images follow, each one introduced by its role." : ""}`,
     },
   ];
   opts.images.forEach((im, i) => {
@@ -156,7 +155,7 @@ The reference images follow, each one introduced by its role.`,
     if (busy(lastErr)) throw new Error("Google está saturado en este momento. Espera un par de minutos y vuelve a intentar.");
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
-  void recordUsage({ kind: "gemini", detail: `Flyer: imagen ${opts.format}`, costUsd: PRICES.geminiImage["2K"], units: { model: used, size: "2K" } });
+  void recordUsage({ kind: "gemini", detail: opts.label ?? `Flyer: imagen ${opts.format}`, costUsd: PRICES.geminiImage["2K"], units: { model: used, size: "2K" } });
   const out = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
   if (!out?.inlineData?.data) {
     const why = res.candidates?.[0]?.finishReason ?? res.promptFeedback?.blockReason ?? "sin imagen";

@@ -34,6 +34,7 @@ export function MobileNav({ clientId, isAgency, badge = 0, previewing = false }:
   const more = [
     { href: `${base}/campanas`, label: "Campañas" },
     { href: `${base}/flyers`, label: "Flyers con IA" },
+    { href: `${base}/rebranding`, label: "Rebranding" },
     { href: `${base}/marca`, label: "Marca" },
     { href: `${base}/competencia`, label: "Competencia" },
     { href: `${base}/estilo`, label: "Estilo de edición" },

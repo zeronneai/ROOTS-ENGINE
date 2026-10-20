@@ -11,7 +11,7 @@ const MAX_STYLE = 3;
 const MAX_PEOPLE = 4;
 const MAX_TOTAL = 14;
 
-async function loadImage(db: SupabaseClient, bucket: string, path: string, role: RefImage["role"], label?: string | null): Promise<RefImage> {
+export async function loadImage(db: SupabaseClient, bucket: string, path: string, role: RefImage["role"], label?: string | null): Promise<RefImage> {
   const { data, error } = await db.storage.from(bucket).download(path);
   if (error || !data) throw new Error(`No se pudo leer la imagen ${path}`);
   const { data: signed } = await db.storage.from(bucket).createSignedUrl(path, 60 * 60);

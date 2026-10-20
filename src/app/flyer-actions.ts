@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireClientAccess } from "@/server/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -60,4 +61,28 @@ export async function deleteFlyerAction(clientId: string, id: string) {
   const { data } = await db.from("flyers").delete().eq("id", id).eq("client_id", clientId).select("output_path").maybeSingle();
   if (data?.output_path) await db.storage.from("brand").remove([data.output_path]);
   revalidatePath(`/c/${clientId}/flyers`);
+}
+
+/** Usa un logo generado en el rebranding como el logo oficial (fijo en los flyers). */
+export async function adoptRebrandLogoAction(clientId: string, rebrandId: string, path: string) {
+  const viewer = await requireClientAccess(clientId);
+  if (viewer.role !== "agency") throw new Error("Solo la agencia");
+  if (!path.startsWith(`${clientId}/rebrand/${rebrandId}/`) || path.includes("..")) throw new Error("Ruta inválida");
+  const db = supabaseAdmin();
+  await db.from("brand_assets").update({ pinned: false }).eq("client_id", clientId).eq("category", "logo");
+  const { error } = await db
+    .from("brand_assets")
+    .insert({ client_id: clientId, kind: "library", category: "logo", label: "Logo nuevo (rebranding)", path, pinned: true, created_by: viewer.id });
+  if (error) throw error;
+  revalidatePath(`/c/${clientId}/flyers`);
+  revalidatePath(`/c/${clientId}/rebranding/${rebrandId}`);
+}
+
+/** Borra un análisis de rebranding. */
+export async function deleteRebrandAction(clientId: string, rebrandId: string) {
+  const viewer = await requireClientAccess(clientId);
+  if (viewer.role !== "agency") throw new Error("Solo la agencia");
+  await supabaseAdmin().from("rebrands").delete().eq("id", rebrandId).eq("client_id", clientId);
+  revalidatePath(`/c/${clientId}/rebranding`);
+  redirect(`/c/${clientId}/rebranding`);
 }
