@@ -5,7 +5,7 @@ import { buildEdl, heuristicDirection } from "../lib/edl/build";
 import { getPreset } from "../lib/styles/presets";
 import { demoWords, DEMO_DURATION } from "./demo";
 import { Promo, PROMO } from "./promo/Promo";
-import { ClientPromo, calculateClientPromoMetadata, estimateSegments } from "./promo/ClientPromo";
+import { ClientPromo, calculateClientPromoMetadata, estimateSegments, VOICE_FILES } from "./promo/ClientPromo";
 import { TourEdit, calculateTourMetadata, type TourEditProps } from "./TourEdit";
 import { planShots } from "../lib/tour/plan";
 
@@ -75,7 +75,37 @@ export const RemotionRoot: React.FC = () => (
         width={1920}
         height={1080}
         durationInFrames={1350}
-        defaultProps={{ segments: estimateSegments(), duration: 42.76, voice: null }}
+        defaultProps={{ lang: "es" as const, segments: estimateSegments("es"), duration: VOICE_FILES.es.seconds, voice: null }}
+        calculateMetadata={calculateClientPromoMetadata}
+      />
+      <Composition
+        id="PromoClientesVertical"
+        component={ClientPromo}
+        fps={30}
+        width={1080}
+        height={1920}
+        durationInFrames={1350}
+        defaultProps={{ lang: "es" as const, segments: estimateSegments("es"), duration: VOICE_FILES.es.seconds, voice: null }}
+        calculateMetadata={calculateClientPromoMetadata}
+      />
+      <Composition
+        id="PromoClientesEN"
+        component={ClientPromo}
+        fps={30}
+        width={1920}
+        height={1080}
+        durationInFrames={1350}
+        defaultProps={{ lang: "en" as const, segments: estimateSegments("en"), duration: VOICE_FILES.en.seconds, voice: null }}
+        calculateMetadata={calculateClientPromoMetadata}
+      />
+      <Composition
+        id="PromoClientesENVertical"
+        component={ClientPromo}
+        fps={30}
+        width={1080}
+        height={1920}
+        durationInFrames={1350}
+        defaultProps={{ lang: "en" as const, segments: estimateSegments("en"), duration: VOICE_FILES.en.seconds, voice: null }}
         calculateMetadata={calculateClientPromoMetadata}
       />
   <Composition
