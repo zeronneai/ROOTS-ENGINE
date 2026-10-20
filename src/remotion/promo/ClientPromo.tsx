@@ -90,12 +90,13 @@ const KLine: React.FC<{
 }> = ({ seg, text, size, color = C.ink, weight = 800, font = SANS, hi = [], hiColor = C.sun, align = "center", style = "rise", tracking = -0.04 }) => {
   const f = useCurrentFrame();
   const base = Math.max(0, seg.text.indexOf(text));
-  let cursor = 0;
+  // posición de cada palabra dentro de la línea
+  const words = text.split(" ");
+  const starts = words.map((_, i) => words.slice(0, i).join(" ").length + (i ? 1 : 0));
   return (
     <div style={{ display: "flex", flexWrap: "wrap", justifyContent: align === "center" ? "center" : "flex-start", gap: `0 ${size * 0.24}px`, fontFamily: font, fontWeight: weight, fontSize: size, lineHeight: 1.02, letterSpacing: `${tracking}em`, color }}>
-      {text.split(" ").map((w, i) => {
-        const idx = text.indexOf(w, cursor);
-        cursor = idx + w.length;
+      {words.map((w, i) => {
+        const idx = starts[i];
         const start = at(seg, base + idx) - 3;
         const p = ease(f, start, style === "slam" ? 10 : 16);
         const clean = w.replace(/[.,:¿?!]/g, "");
