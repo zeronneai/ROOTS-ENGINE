@@ -19,7 +19,7 @@ import { useFonts } from "../fonts";
 
 export const PROMO = { fps: 30, width: 1920, height: 1080, durationInFrames: 900 };
 
-const C = {
+export const C = {
   ink: "#211c35",
   night: "#0c0a14",
   purple: "#4f4789",
@@ -31,18 +31,18 @@ const C = {
   muted: "#6e6a80",
   white: "#ffffff",
 };
-const SANS = `"Inter", ui-sans-serif, system-ui, sans-serif`;
-const DISPLAY = `"Josefin Sans", ui-sans-serif, system-ui, sans-serif`;
-const OUT = Easing.bezier(0.16, 1, 0.3, 1); // salida tipo "expo", suave y premium
-const IN_OUT = Easing.bezier(0.65, 0, 0.35, 1);
+export const SANS = `"Inter", ui-sans-serif, system-ui, sans-serif`;
+export const DISPLAY = `"Josefin Sans", ui-sans-serif, system-ui, sans-serif`;
+export const OUT = Easing.bezier(0.16, 1, 0.3, 1); // salida tipo "expo", suave y premium
+export const IN_OUT = Easing.bezier(0.65, 0, 0.35, 1);
 
-const ease = (f: number, start: number, dur: number, from = 0, to = 1, e = OUT) =>
+export const ease = (f: number, start: number, dur: number, from = 0, to = 1, e = OUT) =>
   interpolate(f, [start, start + dur], [from, to], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: e });
 
 // ───────────────────────────── piezas ─────────────────────────────
 
 /** Palabras que entran una por una, de borroso a nítido. */
-const Words: React.FC<{
+export const Words: React.FC<{
   text: string;
   at: number;
   size: number;
@@ -109,7 +109,7 @@ const Words: React.FC<{
   );
 };
 
-const Kicker: React.FC<{ text: string; at: number; color?: string; dot?: string }> = ({ text, at, color = C.purple, dot = C.peach }) => {
+export const Kicker: React.FC<{ text: string; at: number; color?: string; dot?: string }> = ({ text, at, color = C.purple, dot = C.peach }) => {
   const f = useCurrentFrame();
   const p = ease(f, at, 20);
   return (
@@ -135,7 +135,7 @@ const Kicker: React.FC<{ text: string; at: number; color?: string; dot?: string 
 };
 
 /** Esfera brillante "3D" que flota (luz arriba a la izquierda). */
-const Orb: React.FC<{ x: number; y: number; r: number; color: string; drift?: number; delay?: number; blur?: number }> = ({
+export const Orb: React.FC<{ x: number; y: number; r: number; color: string; drift?: number; delay?: number; blur?: number }> = ({
   x,
   y,
   r,
@@ -168,7 +168,7 @@ const Orb: React.FC<{ x: number; y: number; r: number; color: string; drift?: nu
 };
 
 /** Anillo 3D (toro) hecho con bordes en perspectiva. */
-const Ring: React.FC<{ x: number; y: number; size: number; color: string; delay?: number }> = ({ x, y, size, color, delay = 0 }) => {
+export const Ring: React.FC<{ x: number; y: number; size: number; color: string; delay?: number }> = ({ x, y, size, color, delay = 0 }) => {
   const f = useCurrentFrame();
   const p = ease(f, delay, 40);
   return (
@@ -188,7 +188,7 @@ const Ring: React.FC<{ x: number; y: number; size: number; color: string; delay?
 };
 
 /** Fondo claro con luz suave de los colores de la marca. */
-const Light: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+export const Light: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <AbsoluteFill
     style={{
       background: `radial-gradient(1100px 700px at 88% -10%, rgba(252,231,98,0.35), transparent 60%),
@@ -200,7 +200,7 @@ const Light: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </AbsoluteFill>
 );
 
-const Dark: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+export const Dark: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <AbsoluteFill
     style={{
       background: `radial-gradient(900px 600px at 50% 120%, rgba(79,71,137,0.55), transparent 65%),
@@ -225,7 +225,7 @@ const Scene: React.FC<{ dur: number; children: React.ReactNode; dark?: boolean }
 };
 
 /** Celular en 3D. */
-const Phone: React.FC<{ children: React.ReactNode; w?: number; rotY?: number; rotX?: number; style?: React.CSSProperties }> = ({
+export const Phone: React.FC<{ children: React.ReactNode; w?: number; rotY?: number; rotX?: number; style?: React.CSSProperties }> = ({
   children,
   w = 400,
   rotY = 0,
@@ -296,7 +296,7 @@ const Browser: React.FC<{ children: React.ReactNode; w: number; h: number; rotY?
   </div>
 );
 
-const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
+export const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
   <div
     style={{
       background: C.white,
@@ -313,17 +313,17 @@ const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }>
   </div>
 );
 
-const Chip: React.FC<{ children: React.ReactNode; bg?: string; color?: string }> = ({ children, bg = "rgba(252,231,98,0.45)", color = C.ink }) => (
+export const Chip: React.FC<{ children: React.ReactNode; bg?: string; color?: string }> = ({ children, bg = "rgba(252,231,98,0.45)", color = C.ink }) => (
   <span style={{ display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 99, padding: "6px 14px", background: bg, color, fontSize: 17, fontWeight: 600, fontFamily: SANS }}>
     {children}
   </span>
 );
 
-const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+export const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div style={{ fontFamily: SANS, fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: C.muted }}>{children}</div>
 );
 
-const Whoosh: React.FC<{ at: number; volume?: number }> = ({ at, volume = 0.18 }) => (
+export const Whoosh: React.FC<{ at: number; volume?: number }> = ({ at, volume = 0.18 }) => (
   <Sequence from={at} durationInFrames={30}>
     <Audio src={staticFile("sfx/whoosh.mp3")} volume={volume} />
   </Sequence>
@@ -479,7 +479,7 @@ const Fly: React.FC<{ at: number; x: number; y: number; rot?: number; z?: number
   );
 };
 
-const Count: React.FC<{ to: number; at: number; dur?: number; decimals?: number; suffix?: string }> = ({ to, at, dur = 36, decimals = 0, suffix = "" }) => {
+export const Count: React.FC<{ to: number; at: number; dur?: number; decimals?: number; suffix?: string }> = ({ to, at, dur = 36, decimals = 0, suffix = "" }) => {
   const f = useCurrentFrame();
   return (
     <span style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -798,7 +798,7 @@ const S7Edit: React.FC = () => {
 };
 
 /** Flyer de ejemplo (diseño de muestra hecho en CSS). */
-const MockFlyer: React.FC<{ kind: "karaoke" | "tacos" | "glow"; w: number }> = ({ kind, w }) => {
+export const MockFlyer: React.FC<{ kind: "karaoke" | "tacos" | "glow"; w: number }> = ({ kind, w }) => {
   const h = w * 1.25;
   const k = w / 420;
   const look = {

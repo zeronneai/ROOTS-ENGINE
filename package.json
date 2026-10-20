@@ -12,7 +12,8 @@
     "studio": "remotion studio src/remotion/index.ts",
     "demo:styles": "tsx scripts/demo-styles.ts",
     "assets": "node scripts/setup-assets.mjs",
-    "check": "tsx scripts/check.ts"
+    "check": "tsx scripts/check.ts",
+    "promo:clientes": "tsx scripts/promo-clientes.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

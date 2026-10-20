@@ -5,6 +5,7 @@ import { buildEdl, heuristicDirection } from "../lib/edl/build";
 import { getPreset } from "../lib/styles/presets";
 import { demoWords, DEMO_DURATION } from "./demo";
 import { Promo, PROMO } from "./promo/Promo";
+import { ClientPromo, calculateClientPromoMetadata, estimateSegments } from "./promo/ClientPromo";
 import { TourEdit, calculateTourMetadata, type TourEditProps } from "./TourEdit";
 import { planShots } from "../lib/tour/plan";
 
@@ -67,6 +68,16 @@ export const RemotionRoot: React.FC = () => (
     height={1920}
   />
   <Composition id="Promo" component={Promo} {...PROMO} />
+      <Composition
+        id="PromoClientes"
+        component={ClientPromo}
+        fps={30}
+        width={1920}
+        height={1080}
+        durationInFrames={1350}
+        defaultProps={{ segments: estimateSegments(), duration: 42.76, voice: null }}
+        calculateMetadata={calculateClientPromoMetadata}
+      />
   <Composition
     id="Tour"
     component={TourEdit}
