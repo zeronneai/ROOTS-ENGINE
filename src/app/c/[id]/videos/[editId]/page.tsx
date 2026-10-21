@@ -56,7 +56,9 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
   const dir = (tr?.direction ?? null) as { images?: { path: string }[]; removeWords?: number[] } | null;
   const assetUrls = await assetUrlsForEdl(db, { images: (dir?.images ?? []).map((im) => ({ ...im, at: 0, duration: 0 })) });
   const edl = edit.edl as Edl | null;
-  const cutSecs = edl && tr ? tr.duration - edl.segments.reduce((a, s) => a + s.end - s.start, 0) : 0;
+  // los recorridos tienen otro tipo de EDL, sin segmentos
+  const hasSegments = !!edl && Array.isArray(edl.segments) && !isTour;
+  const cutSecs = hasSegments && tr ? tr.duration - edl!.segments.reduce((a, s) => a + s.end - s.start, 0) : 0;
 
   const processing = ["queued", "transcribing", "directing", "directing_claimed", "render_queued", "rendering"].includes(edit.status);
   return (
@@ -101,15 +103,15 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
         </div>
       ) : null}
 
-      {edl && tr && !isTour ? (
+      {edl && tr && hasSegments ? (
         <div className="card mb-6 p-4 text-sm">
           <div className="label mb-2">Lo que hizo la IA</div>
           <div className="flex flex-wrap gap-2">
             <span className="chip">{Math.max(0, edl.segments.length - 1)} cortes ({cutSecs.toFixed(1)} s fuera)</span>
             <span className="chip">{tr.silences ? `${tr.silences.filter((s) => s.end - s.start >= 0.3).length} pausas detectadas` : "pausas: video de antes de la mejora, vuelve a subirlo"}</span>
             <span className="chip">{dir?.removeWords?.length ?? 0} palabras de tomas malas</span>
-            <span className="chip">{edl.zooms.length} zooms</span>
-            <span className="chip">{edl.emojis.length} emojis</span>
+            <span className="chip">{edl.zooms?.length ?? 0} zooms</span>
+            <span className="chip">{edl.emojis?.length ?? 0} emojis</span>
             <span className="chip">{edl.callouts?.length ?? 0} textos animados</span>
             {edl.images?.length ? <span className="chip">{edl.images.length} imágenes</span> : null}
             {edl.segments.some((x) => x.broll) ? <span className="chip">{edl.segments.filter((x) => x.broll).length} tomas sin voz (híbrido)</span> : null}
