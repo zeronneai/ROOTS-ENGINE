@@ -89,13 +89,18 @@ export function ViralText({
       {hooks.length ? (
         <div className="grid gap-2">
           {hooks.map((h, i) => (
-            <button key={i} type="button" onClick={() => set({ text: h.text })} className={`rounded-xl border px-3 py-2 text-left text-sm ${value.text === h.text ? "border-purple glow" : "border-line"}`}>
+            <button key={i} type="button" onClick={() => set({ text: value.text === h.text ? "" : h.text })} className={`rounded-xl border px-3 py-2 text-left text-sm ${value.text === h.text ? "border-purple glow" : "border-line"}`}>
               <span className="font-semibold">{h.text}</span> <span className="text-xs text-muted">· {h.angle}</span>
             </button>
           ))}
         </div>
       ) : null}
-      <textarea rows={2} className="input" value={value.text} onChange={(e) => set({ text: e.target.value })} placeholder="Escribe tu texto o pide sugerencias. Enter para otra línea." />
+      {value.text.trim() ? (
+        <div className="flex justify-end">
+          <button type="button" className="text-xs text-muted underline" onClick={() => set({ text: "" })}>✕ Quitar texto (publicar el video tal cual)</button>
+        </div>
+      ) : null}
+      <textarea rows={2} className="input" value={value.text} onChange={(e) => set({ text: e.target.value })} placeholder="Opcional. Escribe tu texto o pide sugerencias. Si lo dejas vacío, el video va sin texto." />
 
       {value.text.trim() ? (
         <>
