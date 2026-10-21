@@ -65,3 +65,35 @@ export function withFooter(caption: string, footer: string | null | undefined) {
   const has = digits.length >= 7 ? c.replace(/\D/g, "").includes(digits) : c.toLowerCase().includes(f.toLowerCase());
   return has ? c : c ? `${c}\n\n${f}` : f;
 }
+
+const HooksSchema = z.object({
+  hooks: z
+    .array(z.object({ text: z.string().describe("Máximo 9 palabras, se lee en 2 segundos"), angle: z.string().describe("El ángulo en 2 o 3 palabras: POV, pregunta, contraste, secreto, reto...") }))
+    .describe("Exactamente 3, cada una con un ángulo distinto"),
+});
+
+/** 3 textos virales para poner encima del video. */
+export async function writeHooks(input: Omit<CaptionInput, "footer" | "platforms">) {
+  const b = input.brand;
+  const out = await structured({
+    schema: HooksSchema,
+    label: "Texto viral",
+    maxTokens: 800,
+    images: input.frames.slice(0, 8),
+    system: `${AGENCY_CONTEXT}
+You write the on-screen text hook that goes on top of a short vertical video (Reels, TikTok). The frames are in order from start to end.
+- It must make a scroller stop in the first second: curiosity, tension, a relatable POV, a bold claim, a question, a contrast. Tied to what really happens in the video.
+- Max 9 words. Natural, the way people from El Paso / Juárez talk online. One emoji at most, only if it adds.
+- Write in the language spoken in the video; if nobody talks, the language the client posts in most.
+- 3 options with clearly different angles. Never invent prices, promos or facts. Follow CLIENT RULES.
+- No em dashes or long dashes. No hashtags.`,
+    user: `CLIENT: ${json(input.client)}
+BRAND: ${json({ name: b.businessName, oneLiner: b.oneLiner, languageNotes: b.languageNotes, voice: b.voice, audience: b.audience, avoid: b.avoid })}
+ACTIVE MOOD: ${input.mood ? json(input.mood) : "none"}
+CLIENT RULES: ${input.rules?.trim() || "none"}
+PAST CAPTIONS (for voice): ${json(input.examples.slice(0, 6))}
+TRANSCRIPT OF THE VIDEO: ${input.transcript?.trim() ? json(input.transcript.slice(0, 3000)) : "(no speech or not available)"}
+${input.hint?.trim() ? `NOTES FROM THE TEAM: ${json(input.hint)}` : ""}`,
+  });
+  return out.hooks.slice(0, 3).map((h) => ({ ...h, text: h.text.replace(/\s*[—–]\s*/g, ", ").trim() }));
+}

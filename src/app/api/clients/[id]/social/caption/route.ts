@@ -1,5 +1,5 @@
 import { clientRoute } from "@/server/api";
-import { generateCaption } from "@/server/captions";
+import { generateCaption, generateHooks } from "@/server/captions";
 
 export const maxDuration = 120;
 
@@ -18,6 +18,9 @@ export const POST = clientRoute(async ({ db, clientId, body }) => {
     transcript = typeof t?.text === "string" ? t.text : null;
   }
   if (!frames.length && !transcript) throw new Error("No pude ver el video. Escoge o sube uno primero.");
+
+  // kind: "hooks" = 3 textos para encima del video; si no, el copy del post
+  if (body.kind === "hooks") return generateHooks(db, clientId, { frames, transcript, hint: typeof body.hint === "string" ? body.hint.slice(0, 500) : null });
 
   const out = await generateCaption(db, clientId, {
     frames,

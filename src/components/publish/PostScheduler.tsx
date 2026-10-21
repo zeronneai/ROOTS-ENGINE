@@ -1,10 +1,12 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Spinner } from "../ApiButton";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { compressIfNeeded } from "@/lib/compress-video";
 import { grabFrames } from "@/lib/video-frames";
+import { burnText, burnTextImage, type OverlayOpts } from "@/lib/overlay-text";
+import { DEFAULT_OVERLAY, ViralText } from "./ViralText";
 
 type Account = { id: string; platform: string; name: string };
 type EditOption = { id: string; title: string; caption: string | null; ideaId: string | null; outputPath: string | null };
@@ -37,6 +39,77 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
   const [done, setDone] = useState(false);
   const [hint, setHint] = useState("");
   const [writing, setWriting] = useState(false);
+  const [overlay, setOverlay] = useState<OverlayOpts>(DEFAULT_OVERLAY);
+  // el video que se está viendo (para la IA y la vista previa del texto)
+  const editPath = source === "edit" ? (edits.find((e) => e.id === editId)?.outputPath ?? null) : null;
+  const uploadMedia = useMemo(() => (file ? { src: URL.createObjectURL(file), kind: (file.type.startsWith("image/") ? "image" : "video") as "video" | "image" } : null), [file]);
+  useEffect(() => () => { if (uploadMedia) URL.revokeObjectURL(uploadMedia.src); }, [uploadMedia]);
+  const [editMedia, setEditMedia] = useState<{ path: string; src: string } | null>(null);
+  useEffect(() => {
+    if (!editPath) return;
+    let alive = true;
+    supabaseBrowser()
+      .storage.from("renders")
+      .createSignedUrl(editPath, 3600)
+      .then(({ data }) => alive && data?.signedUrl && setEditMedia({ path: editPath, src: data.signedUrl }));
+    return () => {
+      alive = false;
+    };
+  }, [editPath]);
+  const media =
+    source === "upload" ? uploadMedia : source === "edit" && editMedia && editMedia.path === editPath ? { src: editMedia.src, kind: "video" as const } : null;
+
+  async function framesOfMedia() {
+    if (!media) return [];
+    try {
+      return await grabFrames(media.src, media.kind);
+    } catch {
+      return [];
+    }
+  }
+
+  async function suggestHooks() {
+    const res = await fetch(`/api/clients/${clientId}/social/caption`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "hooks", frames: await framesOfMedia(), editId: source === "edit" ? editId : null, hint }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error ?? "No se pudieron sugerir textos");
+    return j.result as { hooks: { text: string; angle: string }[]; brandColor: string | null };
+  }
+
+  /** El archivo final: el original o, si hay texto viral, con el texto pegado. */
+  async function finalFile(): Promise<File | null> {
+    const withText = overlay.text.trim().length > 0 && (source === "upload" || source === "edit");
+    let f: File | null = source === "upload" ? file : null;
+    if (withText && source === "edit" && media) {
+      setBusy("Bajando el video...");
+      const blob = await (await fetch(media.src)).blob();
+      f = new File([blob], "video.mp4", { type: "video/mp4" });
+    }
+    if (!f || !withText) return f;
+    if (f.type.startsWith("image/")) return burnTextImage(f, overlay);
+    setBusy("Poniendo el texto: 0%");
+    return burnText(f, overlay, (p) => setBusy(`Poniendo el texto: ${Math.round(p * 100)}%`));
+  }
+
+  async function downloadPreview() {
+    setErr(null);
+    try {
+      const f = await finalFile();
+      if (!f) throw new Error("Escoge el video primero");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(f);
+      a.download = f.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
   const youtube = useMemo(() => accounts.some((a) => a.platform === "youtube" && picked.includes(a.id)), [accounts, picked]);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -50,37 +123,15 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
   async function writeWithAi() {
     setErr(null);
     setWriting(true);
-    let objectUrl: string | null = null;
     try {
-      let src: string | null = null;
-      let kind: "video" | "image" = "video";
-      if (source === "upload") {
-        if (!file) throw new Error("Primero escoge el archivo");
-        objectUrl = URL.createObjectURL(file);
-        src = objectUrl;
-        kind = file.type.startsWith("image/") ? "image" : "video";
-      } else if (source === "edit") {
-        const path = edits.find((e) => e.id === editId)?.outputPath;
-        if (path) {
-          const { data } = await supabaseBrowser().storage.from("renders").createSignedUrl(path, 600);
-          src = data?.signedUrl ?? null;
-        }
-      }
-      let frames: string[] = [];
-      if (src) {
-        try {
-          frames = await grabFrames(src, kind);
-        } catch {
-          frames = [];
-        }
-      }
+      if (source === "upload" && !file) throw new Error("Primero escoge el archivo");
       const res = await fetch(`/api/clients/${clientId}/social/caption`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          frames,
+          frames: await framesOfMedia(),
           editId: source === "edit" ? editId : null,
-          hint,
+          hint: [hint, overlay.text.trim() ? `On-screen text of the video: ${overlay.text}` : ""].filter(Boolean).join(". "),
           platforms: accounts.filter((a) => picked.includes(a.id)).map((a) => a.platform),
         }),
       });
@@ -90,7 +141,6 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
     } catch (e) {
       setErr((e as Error).message);
     } finally {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
       setWriting(false);
     }
   }
@@ -100,10 +150,15 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
     setDone(false);
     try {
       let mediaPath: string | null = null;
-      if (source === "upload") {
-        if (!file) throw new Error("Escoge el archivo");
+      // con texto viral, el video del motor se sube como archivo nuevo ya con el texto
+      const withText = overlay.text.trim().length > 0 && (source === "upload" || source === "edit");
+      const sendAs = withText ? "upload" : source;
+      if (sendAs === "upload") {
+        if (source === "upload" && !file) throw new Error("Escoge el archivo");
         setBusy("Preparando el archivo...");
-        const f = file.type.startsWith("video/") ? await compressIfNeeded(file, (p) => setBusy(`Comprimiendo: ${Math.round(p * 100)}%`)) : file;
+        const base = await finalFile();
+        if (!base) throw new Error("Escoge el archivo");
+        const f = base.type.startsWith("video/") ? await compressIfNeeded(base, (p) => setBusy(`Comprimiendo: ${Math.round(p * 100)}%`)) : base;
         const ext = (f.name.split(".").pop() || "mp4").toLowerCase();
         mediaPath = `${clientId}/social/${crypto.randomUUID()}.${ext}`;
         setBusy("Subiendo...");
@@ -115,10 +170,10 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          source,
-          editId: source === "edit" ? editId : null,
+          source: sendAs,
+          editId: sendAs === "edit" ? editId : null,
           mediaPath,
-          dropboxUrl: source.startsWith("dropbox") ? dropboxUrl : null,
+          dropboxUrl: sendAs.startsWith("dropbox") ? dropboxUrl : null,
           caption,
           title: youtube ? title : null,
           accountIds: picked,
@@ -195,6 +250,10 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
         </div>
       </div>
 
+      {source === "edit" || source === "upload" ? (
+        <ViralText src={media?.src ?? null} kind={media?.kind ?? "video"} value={overlay} onChange={setOverlay} suggest={suggestHooks} />
+      ) : null}
+
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="label">Copy</span>
@@ -227,6 +286,9 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
         <button className="btn btn-primary" disabled={!!busy || !picked.length} onClick={submit}>
           {busy ? <><Spinner /> {busy}</> : "Programar"}
         </button>
+        {overlay.text.trim() && media?.kind === "video" ? (
+          <button type="button" className="btn btn-ghost text-sm" disabled={!!busy} onClick={downloadPreview}>Descargar con texto</button>
+        ) : null}
         {done ? <span className="text-xs text-ok">Listo, quedó programado.</span> : null}
         {err ? <span className="text-xs text-bad">{err}</span> : null}
       </div>
