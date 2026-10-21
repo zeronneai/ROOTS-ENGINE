@@ -33,6 +33,7 @@ import type { Word } from "../src/lib/edl/types";
 import type { BrollCopy, Direction } from "../src/lib/edl/build";
 import { hybridCopy } from "../src/lib/tour/hybrid";
 import { resolveWaitingPosts } from "../src/server/publishing";
+import { checkDeadlines, generateSlotPosts } from "../src/server/slots";
 
 const db = supabaseAdmin();
 const AUTO_RENDER = process.env.AUTO_RENDER === "true";
@@ -379,6 +380,9 @@ async function loop() {
       if (busy) return;
       busy = true;
       try {
+        const made = await generateSlotPosts(db);
+        if (made) console.log(`   calendario fijo: ${made} post(s) nuevos programados`);
+        await checkDeadlines(db, console.log);
         await resolveWaitingPosts(db, console.log);
       } catch (e) {
         console.error("publicación:", e);

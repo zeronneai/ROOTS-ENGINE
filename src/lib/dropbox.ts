@@ -70,7 +70,7 @@ export async function fetchDropboxMedia(url: string, used: string[] = []) {
   if (!isZip) {
     const fname = name ?? "video.mp4";
     if (/text\/html/i.test(type)) throw new Error("Dropbox regresó una página en vez del archivo. Revisa que el link sea público.");
-    return { buffer: buf, name: fname, kind: IMAGE.test(fname) ? ("image" as const) : ("video" as const) };
+    return { buffer: buf, name: fname, kind: IMAGE.test(fname) ? ("image" as const) : ("video" as const), caption: null as string | null };
   }
   const entries = (await readZip(buf))
     .filter((e) => VIDEO.test(e.name) || IMAGE.test(e.name))
@@ -78,8 +78,23 @@ export async function fetchDropboxMedia(url: string, used: string[] = []) {
     .sort((a, b) => b.modified.getTime() - a.modified.getTime());
   const pick = entries[0];
   if (!pick) throw new Error("No hay videos nuevos en la carpeta de Dropbox (los que hay ya se publicaron).");
-  return { buffer: await pick.read(), name: pick.name, kind: IMAGE.test(pick.name) ? ("image" as const) : ("video" as const) };
+  // si junto al video hay un .txt con el mismo nombre, ese es el copy
+  const base = pick.name.replace(/\.[^.]+$/, "");
+  const all = await readZip(buf);
+  const txt = all.find((e) => e.name.toLowerCase() === `${base.toLowerCase()}.txt`);
+  const caption = txt ? (await txt.read()).toString("utf8").trim() : null;
+  return { buffer: await pick.read(), name: pick.name, kind: IMAGE.test(pick.name) ? ("image" as const) : ("video" as const), caption };
 }
 
 export const mimeFor = (name: string) =>
   /\.mov$/i.test(name) ? "video/quicktime" : /\.webm$/i.test(name) ? "video/webm" : /\.png$/i.test(name) ? "image/png" : /\.webp$/i.test(name) ? "image/webp" : /\.jpe?g$/i.test(name) ? "image/jpeg" : "video/mp4";
+
+/** ¿Hay un video nuevo (no usado) en la carpeta? Para avisar si el editor no ha subido nada. */
+export async function folderHasNew(url: string, used: string[]) {
+  try {
+    await fetchDropboxMedia(url, used);
+    return true;
+  } catch {
+    return false;
+  }
+}

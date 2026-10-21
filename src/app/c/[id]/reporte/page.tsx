@@ -43,6 +43,7 @@ export default async function ReportePage({ params }: { params: Promise<{ id: st
           <p className="text-sm text-muted">Mercado, competencia, marca, presencia digital y oferta.</p>
 
           <div className="mt-6 space-y-5 text-sm">
+            {r.business ? <Score label="Experiencia del cliente" value={Math.round(r.business.score)} /> : null}
             {r.digitalPresence ? (
               <Score label="Presencia digital" value={Math.round(r.digitalPresence.score)} />
             ) : null}

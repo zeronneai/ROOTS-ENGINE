@@ -83,6 +83,25 @@ const F = {
     dos: z.array(z.string()),
     donts: z.array(z.string()),
   }),
+  business: z.object({
+    score: z.number().describe("0 a 100: qué tan buena es la experiencia real del cliente según las reseñas"),
+    summary: z.string().describe("Qué dicen sus clientes del negocio, más allá del marketing, en 2 o 3 frases"),
+    loves: z.array(z.object({ theme: z.string(), mentions: z.number().describe("Cuántas reseñas de la muestra lo mencionan"), quote: z.string().describe("Cita corta y textual de una reseña") })).describe("Lo que más aman, de más a menos mencionado"),
+    complaints: z
+      .array(
+        z.object({
+          theme: z.string().describe("Ej: limpieza del baño, tiempo de espera, trato, precio, estacionamiento"),
+          mentions: z.number(),
+          quote: z.string().describe("Cita corta y textual"),
+          severity: z.enum(["alta", "media", "baja"]),
+          fix: z.string().describe("Qué cambiar en la operación, no solo en redes"),
+        }),
+      )
+      .describe("Quejas reales, de más grave a menos. Vacío si no hay"),
+    vsCompetitors: z.string().describe("Qué elogian o critican en los competidores locales y cómo se compara el cliente"),
+    replyPlaybook: z.string().describe("Cómo contestar reseñas negativas, con un ejemplo de respuesta"),
+    contentFromReviews: z.array(z.string()).describe("3 a 5 ideas de contenido que salen de las reseñas (presumir lo que aman, responder públicamente a una queja ya resuelta)"),
+  }),
   kpis: z.array(z.object({ metric: z.string(), target: z.string(), why: z.string() })),
   next30Days: z.array(z.object({ week: z.number(), focus: z.string() })),
 };
@@ -93,8 +112,9 @@ const PartD = z.object({ brandAudit: F.brandAudit, digitalPresence: F.digitalPre
 const PartB = z.object({ offer: F.offer, opportunities: F.opportunities, strategy: F.strategy });
 const PartC = z.object({ recordingGuide: F.recordingGuide, kpis: F.kpis, next30Days: F.next30Days });
 export const ReportSchema = z.object(F);
-export type Report = Omit<z.infer<typeof ReportSchema>, "offer" | "digitalPresence"> &
-  Partial<Pick<z.infer<typeof ReportSchema>, "offer" | "digitalPresence">>;
+const PartE = z.object({ business: F.business });
+export type Report = Omit<z.infer<typeof ReportSchema>, "offer" | "digitalPresence" | "business"> &
+  Partial<Pick<z.infer<typeof ReportSchema>, "offer" | "digitalPresence" | "business">>;
 
 export async function buildReport(opts: {
   client: { name: string; niche: string | null; city: string | null; plan_tier: string };
@@ -111,6 +131,7 @@ export async function buildReport(opts: {
   website: { url: string; text: string | null } | null;
   google: unknown;
   localMarket: unknown[];
+  competitorReviews?: unknown[];
   ownTopPosts: { caption: string | null; views: number | null; likes: number | null; comments: number | null }[];
   competitors: { handle: string; platform: string; kind: string; note: string | null; medianViews: number | null }[];
   winners: { handle: string; views: number | null; outlier_score: number | null; analysis: PostAnalysis | null }[];
@@ -127,6 +148,7 @@ Be specific and evidence based: cite competitors, numbers and the analyzed winni
 The "offer" section uses Alex Hormozi's Grand Slam Offer method: an offer so good people feel stupid saying no. Maximize the value equation (dream outcome x perceived likelihood of achievement) / (time delay x effort and sacrifice). Stack bonuses that each kill a specific objection, add a strong guarantee, real urgency or scarcity, and a clear name. Keep it realistic for this local business and legal for its industry (lawyers, medical, etc. have advertising rules: put those limits in cautions).
 The "market" section must use the local Google Maps market: who dominates locally (ratings, review volume), how the client ranks against them, and what that means.
 The "digitalPresence" section must evaluate their Google profile too (rating, number of reviews vs local competitors, hours, website link, recurring themes in reviews). If they are not on Google, that is a high priority issue.
+The "business" section is an audit of the BUSINESS itself, not the marketing: read every Google review (theirs and the local competitors') and find what customers love and what hurts the business (cleanliness, bathroom, wait times, staff attitude, prices, parking, follow-up...). Count mentions only from the reviews provided, quote them literally and short, and give operational fixes. If there are no reviews, say so and set score to 0.
 The "digitalPresence" section diagnoses where their online presence is failing: posting consistency, content quality vs competitors, calls to action, website clarity, contact options. Only judge what the data shows; list anything you could not check (e.g. Google reviews, Facebook) in notChecked. No generic marketing advice. If data is missing, say so and give the best recommendation anyway.
 Everything in Spanish (Mexican, casual but professional). hooksToTest in the language the brand should post in.
 In this call write ONLY these sections: ${focus}.`,
@@ -138,6 +160,7 @@ THEIR OWN ACCOUNTS: ${json(opts.ownStats)}
 THEIR WEBSITE: ${json(opts.website)}
 THEIR GOOGLE BUSINESS PROFILE (null = not found on Google): ${json(opts.google)}
 LOCAL MARKET ON GOOGLE MAPS (same category in their city, with rating and review count): ${json(opts.localMarket)}
+REVIEWS OF THE TOP LOCAL COMPETITORS: ${json(opts.competitorReviews ?? [])}
 THEIR TOP POSTS: ${json(opts.ownTopPosts)}
 
 ACCOUNTS WE WATCH: ${json(opts.competitors)}
@@ -145,11 +168,12 @@ ACCOUNTS WE WATCH: ${json(opts.competitors)}
 WINNING VIDEOS (analyzed): ${json(opts.winners)}`,
     });
 
-  const [a, d, b, c] = await Promise.all([
+  const [a, d, b, c, e] = await Promise.all([
     ask(PartA, "headline, market, competitors", 6000),
     ask(PartD, "brandAudit, digitalPresence", 5000),
     ask(PartB, "offer, opportunities, strategy", 7000),
     ask(PartC, "recordingGuide, kpis, next30Days", 5000),
+    ask(PartE, "business", 5000).catch((err) => (console.error("reporte: experiencia del negocio", err), null)),
   ]);
-  return { ...a, ...d, ...b, ...c };
+  return { ...a, ...d, ...b, ...c, ...(e ?? {}) };
 }

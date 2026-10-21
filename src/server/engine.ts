@@ -476,7 +476,7 @@ export async function generateReport(db: DB, clientId: string) {
     }),
   );
   const website = ctx.client.website ? { url: ctx.client.website, text: await fetchWebsiteText(ctx.client.website) } : null;
-  const g = ctx.client as typeof ctx.client & { google_profile?: GooglePlace | null; local_market?: Omit<GooglePlace, "reviews">[] | null };
+  const g = ctx.client as typeof ctx.client & { google_profile?: GooglePlace | null; local_market?: Omit<GooglePlace, "reviews">[] | null; local_reviews?: unknown[] | null };
 
   const data = await buildReport({
     client: { name: ctx.client.name, niche: ctx.client.niche, city: ctx.client.city, plan_tier: ctx.client.plan_tier },
@@ -485,6 +485,7 @@ export async function generateReport(db: DB, clientId: string) {
     website,
     google: g.google_profile ?? null,
     localMarket: g.local_market ?? [],
+    competitorReviews: g.local_reviews ?? [],
     ownTopPosts: (ownPosts ?? []).map((p) => ({ caption: p.caption?.slice(0, 300) ?? null, views: p.views, likes: p.likes, comments: p.comments })),
     competitors: (comps ?? [])
       .filter((c) => !c.is_own_account)
@@ -521,7 +522,22 @@ export async function researchGoogle(db: DB, clientId: string) {
   ]);
 
   const localMarket = market.filter((m) => !place || m.title !== place.title);
+  // reseñas de los 3 competidores locales con más reseñas, para comparar la experiencia
+  const top = [...localMarket].filter((m) => m.url).sort((a, b) => (b.reviewsCount ?? 0) - (a.reviewsCount ?? 0)).slice(0, 3);
+  const localReviews = (
+    await Promise.all(
+      top.map((m) =>
+        scrapeGooglePlace({ url: m.url }, 20)
+          .then((p) => (p ? { name: p.title, rating: p.rating, reviewsCount: p.reviewsCount, reviews: p.reviews.slice(0, 20) } : null))
+          .catch((e) => (console.error(e), null)),
+      ),
+    )
+  ).filter(Boolean);
   await db.from("clients").update({ google_profile: place, local_market: localMarket }).eq("id", clientId);
+  await db.from("clients").update({ local_reviews: localReviews }).eq("id", clientId).then(
+    () => undefined,
+    () => undefined,
+  );
 
   if (place) {
     const lines = [

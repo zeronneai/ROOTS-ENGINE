@@ -3,7 +3,8 @@ import { Empty, PageTitle } from "@/components/Shell";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConnectSocial } from "@/components/publish/ConnectSocial";
 import { PostScheduler } from "@/components/publish/PostScheduler";
-import { cancelPostAction } from "@/app/publish-actions";
+import { cancelPostAction, deleteSlotAction, toggleSlotAction } from "@/app/publish-actions";
+import { SlotForm } from "@/components/publish/SlotForm";
 import { listAccounts, type SocialAccount } from "@/lib/zernio";
 import { syncPosts } from "@/server/publishing";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -50,7 +51,7 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
     await syncPosts(supabaseAdmin(), id);
   }
 
-  const [{ data: posts }, { data: edits }] = await Promise.all([
+  const [{ data: posts }, { data: edits }, { data: slots }] = await Promise.all([
     db.from("scheduled_posts").select("*").eq("client_id", id).order("scheduled_for", { ascending: false }).limit(40),
     db
       .from("edits")
@@ -60,6 +61,7 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
       .not("output_path", "is", null)
       .order("created_at", { ascending: false })
       .limit(30),
+    db.from("posting_slots").select("*").eq("client_id", id).order("created_at"),
   ]);
   type EditRow = { id: string; created_at: string; idea_id: string | null; recordings: { original_name: string } | null; content_ideas: { title: string; caption: string | null; hashtags: string[] | null } | null };
   const editOptions = ((edits ?? []) as unknown as EditRow[]).map((e) => ({
@@ -126,6 +128,25 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
               <ConnectSocial clientId={id} />
             </div>
 
+            {slots?.length ? (
+              <div className="card space-y-3 p-5">
+                <div className="font-semibold">Calendario fijo</div>
+                {slots.map((sl) => (
+                  <div key={sl.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm">
+                    <span className="font-semibold">{sl.name}</span>
+                    <span className="chip">{(sl.weekdays as number[]).sort().map((d) => ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"][d]).join(", ")} · {sl.time}</span>
+                    <span className="chip">listo {sl.deadline_hours} h antes</span>
+                    {(sl.accounts as { platform: string }[]).map((a, k) => <span key={k} className="chip">{NET[a.platform] ?? a.platform}</span>)}
+                    {!sl.active ? <span className="chip text-muted">pausado</span> : null}
+                    <span className="ml-auto flex gap-3">
+                      <form action={toggleSlotAction.bind(null, id, sl.id, !sl.active)}><SubmitButton className="text-xs underline">{sl.active ? "Pausar" : "Reactivar"}</SubmitButton></form>
+                      <form action={deleteSlotAction.bind(null, id, sl.id)}><SubmitButton className="text-xs text-bad underline">Borrar</SubmitButton></form>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div className="space-y-3">
               <h2 className="font-semibold">Próximos</h2>
               {upcoming.length ? upcoming.map((p) => <Row key={p.id} p={p} />) : <p className="text-sm text-muted">No hay nada programado.</p>}
@@ -139,7 +160,10 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
           </section>
           <aside>
             {accounts.length ? (
-              <PostScheduler clientId={id} accounts={accounts.map((a) => ({ id: a.id, platform: a.platform, name: a.name }))} edits={editOptions} defaultEdit={edit ?? null} />
+              <div className="space-y-6">
+                <PostScheduler clientId={id} accounts={accounts.map((a) => ({ id: a.id, platform: a.platform, name: a.name }))} edits={editOptions} defaultEdit={edit ?? null} />
+                <SlotForm clientId={id} accounts={accounts.map((a) => ({ id: a.id, platform: a.platform, name: a.name }))} />
+              </div>
             ) : (
               <div className="card p-5 text-sm text-muted">Conecta al menos una red para programar.</div>
             )}

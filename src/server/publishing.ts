@@ -81,7 +81,7 @@ export async function schedulePost(db: SupabaseClient, clientId: string, userId:
 }
 
 /** Consigue el archivo del post. */
-async function resolveMedia(db: SupabaseClient, row: PostRow): Promise<{ buffer: Buffer; name: string; kind: "video" | "image" } | null> {
+async function resolveMedia(db: SupabaseClient, row: PostRow): Promise<{ buffer: Buffer; name: string; kind: "video" | "image"; caption?: string | null } | null> {
   if (row.media_source === "none") return null;
   if (row.media_source === "edit") {
     const { data: edit } = await db.from("edits").select("output_path, status").eq("id", row.edit_id).eq("client_id", row.client_id).single();
@@ -97,20 +97,30 @@ async function resolveMedia(db: SupabaseClient, row: PostRow): Promise<{ buffer:
     return { buffer: Buffer.from(await data.arrayBuffer()), name, kind: /\.(jpe?g|png|webp)$/i.test(name) ? "image" : "video" };
   }
   // Dropbox: en carpetas, no repetir archivos que ya usamos con el mismo link
-  let used: string[] = [];
-  if (row.media_source === "dropbox_folder") {
-    const { data } = await db.from("scheduled_posts").select("media_name").eq("dropbox_url", row.dropbox_url).neq("id", row.id).not("media_name", "is", null);
-    used = (data ?? []).map((r) => r.media_name as string);
-  }
+  const used = row.media_source === "dropbox_folder" ? await usedNames(db, row.dropbox_url!, row.id) : [];
   const m = await fetchDropboxMedia(row.dropbox_url!, used);
   await db.from("scheduled_posts").update({ media_name: m.name }).eq("id", row.id);
   return m;
 }
 
+/** Archivos de una carpeta de Dropbox que ya se usaron en otros posts. */
+export async function usedNames(db: SupabaseClient, dropboxUrl: string, exceptId?: string) {
+  let q = db.from("scheduled_posts").select("media_name").eq("dropbox_url", dropboxUrl).not("media_name", "is", null).neq("status", "failed");
+  if (exceptId) q = q.neq("id", exceptId);
+  const { data } = await q;
+  return (data ?? []).map((r) => r.media_name as string);
+}
+
 /** Manda el post a Zernio. */
-export async function pushPost(db: SupabaseClient, row: PostRow) {
+export async function pushPost(db: SupabaseClient, input: PostRow) {
+  let row = input;
   try {
     const media = await resolveMedia(db, row);
+    // el copy puede venir en un .txt junto al video en Dropbox
+    if (media?.caption) {
+      row = { ...row, caption: media.caption.slice(0, 2200) };
+      await db.from("scheduled_posts").update({ caption: row.caption }).eq("id", row.id);
+    }
     const mediaUrl = media ? await uploadMedia(media.buffer, media.name.replace(/[^\w.-]+/g, "_"), mimeFor(media.name)) : null;
     const { id, post } = await createPost({
       caption: row.caption,

@@ -62,6 +62,44 @@ export function AnalysisPart({ r }: { r: Report }) {
         </Section>
       ) : null}
 
+      {r.business ? (
+        <Section n="✦" title={`Lo que dicen sus clientes · experiencia ${Math.round(r.business.score)}/100`}>
+          <p className="text-muted">{r.business.summary}</p>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div>
+              <div className="label text-ok">Lo que aman</div>
+              <ul className="mt-2 space-y-2 text-sm">
+                {r.business.loves.map((x, i) => (
+                  <li key={i} className="break-inside-avoid rounded-xl border border-line p-3">
+                    <div className="font-semibold">{x.theme} <span className="text-xs text-muted">· {x.mentions} reseñas</span></div>
+                    <p className="mt-1 italic text-muted">“{x.quote}”</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="label text-bad">Lo que les duele</div>
+              {r.business.complaints.length ? (
+                <ul className="mt-2 space-y-2 text-sm">
+                  {r.business.complaints.map((x, i) => (
+                    <li key={i} className="break-inside-avoid rounded-xl border border-line p-3">
+                      <div className="flex flex-wrap items-center gap-2 font-semibold">{x.theme} <Priority p={x.severity} /> <span className="text-xs font-normal text-muted">{x.mentions} reseñas</span></div>
+                      <p className="mt-1 italic text-muted">“{x.quote}”</p>
+                      <p className="mt-1"><span className="font-semibold text-ok">Qué cambiar:</span> {x.fix}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-muted">No hay quejas en las reseñas revisadas.</p>
+              )}
+            </div>
+          </div>
+          <p className="mt-4 text-sm"><span className="label">Contra la competencia: </span>{r.business.vsCompetitors}</p>
+          <p className="mt-3 text-sm"><span className="label">Cómo contestar reseñas malas: </span>{r.business.replyPlaybook}</p>
+          <div className="mt-4"><List title="Contenido que sale de las reseñas" items={r.business.contentFromReviews} tone="acc" /></div>
+        </Section>
+      ) : null}
+
       {r.offer ? (
         <Section n="05" title="La oferta irresistible">
           <div className="rounded-xl bg-sun/40 p-5">

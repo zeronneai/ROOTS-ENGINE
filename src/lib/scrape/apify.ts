@@ -207,8 +207,8 @@ function mapPlace(i: GmItem): GooglePlace {
 }
 
 /** Perfil de Google del negocio: por link de Google Maps o buscando nombre + ciudad. */
-export async function scrapeGooglePlace(opts: { url?: string | null; query?: string; location?: string | null }, maxReviews = 15) {
-  const input: Record<string, unknown> = { maxReviews, maxImages: 0, language: "es", scrapeReviewsPersonalData: false };
+export async function scrapeGooglePlace(opts: { url?: string | null; query?: string; location?: string | null }, maxReviews = 60) {
+  const input: Record<string, unknown> = { maxReviews, reviewsSort: "newest", maxImages: 0, language: "es", scrapeReviewsPersonalData: false };
   if (opts.url) input.startUrls = [{ url: opts.url }];
   else {
     input.searchStringsArray = [opts.query];
