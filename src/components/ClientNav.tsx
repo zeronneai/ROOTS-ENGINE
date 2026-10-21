@@ -14,6 +14,7 @@ export function ClientNav({ clientId, isAgency, badge = 0 }: { clientId: string;
     { href: `${base}/campanas`, label: "Campañas", n: "✦" },
     { href: `${base}/videos`, label: "Videos", n: "04" },
     { href: `${base}/publicar`, label: "Publicar", n: "✦" },
+    { href: `${base}/web`, label: "Sitio web", n: "✦" },
     { href: `${base}/flyers`, label: "Flyers", n: "✦" },
     { href: `${base}/rebranding`, label: "Rebranding", n: "✦" },
     { href: `${base}/estilo`, label: "Estilo de edición", n: "05" },
