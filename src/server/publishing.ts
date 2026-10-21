@@ -7,6 +7,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createPost, deletePost, ensureProfile, getPost, listAccounts, mapStatus, postResults, uploadMedia, SOCIAL_PLATFORMS } from "../lib/zernio";
 import { fetchDropboxMedia, isDropboxFolder, mimeFor } from "../lib/dropbox";
+import { withFooter } from "../lib/ai/caption";
+import { clientFooter } from "./captions";
+import { runWithClient } from "../lib/usage";
 
 export type PostRow = {
   id: string;
@@ -112,14 +115,31 @@ export async function usedNames(db: SupabaseClient, dropboxUrl: string, exceptId
 }
 
 /** Manda el post a Zernio. */
-export async function pushPost(db: SupabaseClient, input: PostRow) {
+/** El worker le pasa autoCaption (ffmpeg + Whisper); en Vercel no existe y el copy queda como está. */
+export type AutoCaptionFn = (db: SupabaseClient, clientId: string, media: { buffer: Buffer; name: string; kind: "video" | "image" }, platforms: string[]) => Promise<string>;
+
+export async function pushPost(db: SupabaseClient, input: PostRow, opts: { autoCaption?: AutoCaptionFn } = {}) {
   let row = input;
   try {
     const media = await resolveMedia(db, row);
-    // el copy puede venir en un .txt junto al video en Dropbox
+    let caption = row.caption;
     if (media?.caption) {
-      row = { ...row, caption: media.caption.slice(0, 2200) };
-      await db.from("scheduled_posts").update({ caption: row.caption }).eq("id", row.id);
+      // el copy puede venir en un .txt junto al video en Dropbox
+      caption = media.caption;
+    } else if (!caption.trim() && media && row.media_source.startsWith("dropbox")) {
+      // sin .txt y sin copy: la IA lo escribe viendo el video (corre en el worker)
+      try {
+        const write = opts.autoCaption;
+        if (write) caption = await runWithClient(row.client_id, () => write(db, row.client_id, media, row.accounts.map((a) => a.platform)));
+      } catch (e) {
+        console.warn(`   no se pudo escribir el copy con IA: ${(e as Error).message}`);
+      }
+    }
+    // el cierre fijo del cliente (ej. teléfono) siempre va
+    caption = withFooter(caption, await clientFooter(db, row.client_id)).slice(0, 2200);
+    if (caption !== row.caption) {
+      row = { ...row, caption };
+      await db.from("scheduled_posts").update({ caption }).eq("id", row.id);
     }
     const mediaUrl = media ? await uploadMedia(media.buffer, media.name.replace(/[^\w.-]+/g, "_"), mimeFor(media.name)) : null;
     const { id, post } = await createPost({
@@ -172,7 +192,7 @@ export async function cancelPost(db: SupabaseClient, clientId: string, postId: s
 }
 
 /** Worker: posts con video de Dropbox que se publican en los próximos 15 min. */
-export async function resolveWaitingPosts(db: SupabaseClient, log: (m: string) => void) {
+export async function resolveWaitingPosts(db: SupabaseClient, log: (m: string) => void, autoCaption?: AutoCaptionFn) {
   const { data } = await db
     .from("scheduled_posts")
     .select("*")
@@ -186,7 +206,7 @@ export async function resolveWaitingPosts(db: SupabaseClient, log: (m: string) =
     if (!claimed?.length) continue;
     log(`→ publicando ${row.id} (${row.accounts.map((a) => SOCIAL_PLATFORMS[a.platform as keyof typeof SOCIAL_PLATFORMS] ?? a.platform).join(", ")}) con video de Dropbox`);
     try {
-      await pushPost(db, row);
+      await pushPost(db, row, { autoCaption });
       log("   listo, enviado a Zernio");
     } catch (e) {
       log(`   falló: ${(e as Error).message}`);

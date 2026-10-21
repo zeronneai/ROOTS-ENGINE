@@ -91,7 +91,7 @@ export function SlotForm({ clientId, accounts }: { clientId: string; accounts: A
       </label>
       <label className="block space-y-1">
         <span className="label">Copy por defecto (si no hay .txt)</span>
-        <textarea rows={3} className="input" value={caption} onChange={(e) => setCaption(e.target.value)} />
+        <textarea rows={3} className="input" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Déjalo vacío y la IA escribe el copy de cada video viéndolo" />
       </label>
       <div className="flex flex-wrap items-center gap-3">
         <button className="btn btn-primary" disabled={pending} onClick={submit}>{pending ? <><Spinner /> Guardando...</> : "Crear calendario"}</button>

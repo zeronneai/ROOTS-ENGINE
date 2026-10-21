@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { Spinner } from "../ApiButton";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { compressIfNeeded } from "@/lib/compress-video";
+import { grabFrames } from "@/lib/video-frames";
 
 type Account = { id: string; platform: string; name: string };
-type EditOption = { id: string; title: string; caption: string | null; ideaId: string | null };
+type EditOption = { id: string; title: string; caption: string | null; ideaId: string | null; outputPath: string | null };
 
 const NET: Record<string, string> = { instagram: "📸 Instagram", tiktok: "🎵 TikTok", facebook: "👍 Facebook", youtube: "▶️ YouTube" };
 
@@ -34,6 +35,8 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [hint, setHint] = useState("");
+  const [writing, setWriting] = useState(false);
   const youtube = useMemo(() => accounts.some((a) => a.platform === "youtube" && picked.includes(a.id)), [accounts, picked]);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -41,6 +44,55 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
     setEditId(id);
     const e = edits.find((x) => x.id === id);
     if (e?.caption && !caption.trim()) setCaption(e.caption);
+  }
+
+  /** La IA ve el video (fotos + lo que se dice) y escribe el copy con el tono del cliente. */
+  async function writeWithAi() {
+    setErr(null);
+    setWriting(true);
+    let objectUrl: string | null = null;
+    try {
+      let src: string | null = null;
+      let kind: "video" | "image" = "video";
+      if (source === "upload") {
+        if (!file) throw new Error("Primero escoge el archivo");
+        objectUrl = URL.createObjectURL(file);
+        src = objectUrl;
+        kind = file.type.startsWith("image/") ? "image" : "video";
+      } else if (source === "edit") {
+        const path = edits.find((e) => e.id === editId)?.outputPath;
+        if (path) {
+          const { data } = await supabaseBrowser().storage.from("renders").createSignedUrl(path, 600);
+          src = data?.signedUrl ?? null;
+        }
+      }
+      let frames: string[] = [];
+      if (src) {
+        try {
+          frames = await grabFrames(src, kind);
+        } catch {
+          frames = [];
+        }
+      }
+      const res = await fetch(`/api/clients/${clientId}/social/caption`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          frames,
+          editId: source === "edit" ? editId : null,
+          hint,
+          platforms: accounts.filter((a) => picked.includes(a.id)).map((a) => a.platform),
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "No se pudo escribir el copy");
+      setCaption(j.result.caption);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setWriting(false);
+    }
   }
 
   async function submit() {
@@ -143,10 +195,23 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
         </div>
       </div>
 
-      <label className="block space-y-1">
-        <span className="label">Copy</span>
-        <textarea rows={5} className="input" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="El texto del post, con hashtags" />
-      </label>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="label">Copy</span>
+          {source === "edit" || source === "upload" ? (
+            <button type="button" className="btn btn-ghost text-sm" disabled={writing || (source === "upload" && !file)} onClick={writeWithAi}>
+              {writing ? <><Spinner /> Viendo el video...</> : "✨ Escribir copy con IA"}
+            </button>
+          ) : null}
+        </div>
+        {source === "edit" || source === "upload" ? (
+          <input className="input text-sm" value={hint} onChange={(e) => setHint(e.target.value)} placeholder="Contexto para la IA (opcional): promo, evento, a quién va dirigido..." />
+        ) : null}
+        <textarea rows={6} className="input" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="El texto del post, con hashtags" />
+        {source.startsWith("dropbox") ? (
+          <p className="text-xs text-muted">Si lo dejas vacío y no hay .txt junto al video, la IA lo escribe sola viendo el video antes de publicarlo.</p>
+        ) : null}
+      </div>
       {youtube ? (
         <label className="block space-y-1">
           <span className="label">Título para YouTube</span>

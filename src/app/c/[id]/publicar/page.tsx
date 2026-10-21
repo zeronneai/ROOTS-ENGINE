@@ -3,7 +3,7 @@ import { Empty, PageTitle } from "@/components/Shell";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConnectSocial } from "@/components/publish/ConnectSocial";
 import { PostScheduler } from "@/components/publish/PostScheduler";
-import { cancelPostAction, deleteSlotAction, toggleSlotAction } from "@/app/publish-actions";
+import { cancelPostAction, deleteSlotAction, saveCaptionRulesAction, toggleSlotAction } from "@/app/publish-actions";
 import { SlotForm } from "@/components/publish/SlotForm";
 import { listAccounts, type SocialAccount } from "@/lib/zernio";
 import { syncPosts } from "@/server/publishing";
@@ -36,12 +36,12 @@ function splitPosts(list: PostView[]) {
 export default async function PublishPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string; conectada?: string }> }) {
   const { id } = await params;
   const { edit, conectada } = await searchParams;
-  const { db, client } = await loadClient(id);
+  const { db, client, isAgency } = await loadClient(id);
   const ready = !!process.env.ZERNIO_API_KEY;
 
   let accounts: SocialAccount[] = [];
   let accountsError: string | null = null;
-  const { data: row } = await supabaseAdmin().from("clients").select("zernio_profile_id").eq("id", id).single();
+  const { data: row } = await supabaseAdmin().from("clients").select("zernio_profile_id, caption_rules, caption_footer").eq("id", id).single();
   if (ready && row?.zernio_profile_id) {
     try {
       accounts = await listAccounts(row.zernio_profile_id);
@@ -55,7 +55,7 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
     db.from("scheduled_posts").select("*").eq("client_id", id).order("scheduled_for", { ascending: false }).limit(40),
     db
       .from("edits")
-      .select("id, created_at, idea_id, recordings(original_name), content_ideas(title, caption, hashtags)")
+      .select("id, created_at, idea_id, output_path, recordings(original_name), content_ideas(title, caption, hashtags)")
       .eq("client_id", id)
       .eq("status", "done")
       .not("output_path", "is", null)
@@ -63,10 +63,11 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
       .limit(30),
     db.from("posting_slots").select("*").eq("client_id", id).order("created_at"),
   ]);
-  type EditRow = { id: string; created_at: string; idea_id: string | null; recordings: { original_name: string } | null; content_ideas: { title: string; caption: string | null; hashtags: string[] | null } | null };
+  type EditRow = { id: string; created_at: string; idea_id: string | null; output_path: string | null; recordings: { original_name: string } | null; content_ideas: { title: string; caption: string | null; hashtags: string[] | null } | null };
   const editOptions = ((edits ?? []) as unknown as EditRow[]).map((e) => ({
     id: e.id,
     ideaId: e.idea_id,
+    outputPath: e.output_path,
     title: `${e.content_ideas?.title ?? e.recordings?.original_name ?? "Video"} · ${fmtDateTime(e.created_at)}`,
     caption: e.content_ideas?.caption
       ? `${e.content_ideas.caption}${e.content_ideas.hashtags?.length ? `\n\n${e.content_ideas.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")}` : ""}`
@@ -127,6 +128,24 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
               )}
               <ConnectSocial clientId={id} />
             </div>
+
+            {isAgency ? (
+              <details className="card p-5" open={!row?.caption_rules && !row?.caption_footer}>
+                <summary className="cursor-pointer font-semibold">Cómo escribe el copy la IA</summary>
+                <form action={saveCaptionRulesAction.bind(null, id)} className="mt-3 space-y-3">
+                  <label className="block space-y-1">
+                    <span className="label">Reglas fijas</span>
+                    <textarea name="caption_rules" rows={4} className="input text-sm" defaultValue={row?.caption_rules ?? ""} placeholder="Ej: cierra con el teléfono y consulta gratis, hashtags de cajón #elpaso..., nunca digas..." />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="label">Cierre que siempre va al final</span>
+                    <input name="caption_footer" className="input text-sm" defaultValue={row?.caption_footer ?? ""} placeholder="Ej: 📱 915-400-1099 FREE consultation." />
+                  </label>
+                  <p className="text-xs text-muted">El cierre se agrega a todos los posts de este cliente, aunque el copy lo escribas tú. Si el copy ya trae el teléfono, no lo repite. Además, la IA copia el estilo de los últimos posts del cliente.</p>
+                  <SubmitButton className="btn btn-ghost text-sm">Guardar</SubmitButton>
+                </form>
+              </details>
+            ) : null}
 
             {slots?.length ? (
               <div className="card space-y-3 p-5">

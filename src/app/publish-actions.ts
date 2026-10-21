@@ -65,3 +65,18 @@ export async function deleteSlotAction(clientId: string, slotId: string) {
   await db.from("posting_slots").delete().eq("id", slotId).eq("client_id", clientId);
   revalidatePath(`/c/${clientId}/publicar`);
 }
+
+/** Reglas del copy y cierre fijo del cliente (ej. siempre el teléfono al final). */
+export async function saveCaptionRulesAction(clientId: string, form: FormData) {
+  const viewer = await requireClientAccess(clientId);
+  if (viewer.role !== "agency") throw new Error("Solo la agencia");
+  const val = (k: string, max: number) => {
+    const v = form.get(k);
+    return typeof v === "string" && v.trim() ? v.trim().replace(/[—–]/g, ",").slice(0, max) : null;
+  };
+  await supabaseAdmin()
+    .from("clients")
+    .update({ caption_rules: val("caption_rules", 2000), caption_footer: val("caption_footer", 300) })
+    .eq("id", clientId);
+  revalidatePath(`/c/${clientId}/publicar`);
+}
