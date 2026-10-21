@@ -32,6 +32,7 @@ export function MobileNav({ clientId, isAgency, badge = 0, previewing = false }:
     { href: `${base}/videos`, label: "Videos", icon: I.video },
   ];
   const more = [
+    { href: `${base}/publicar`, label: "Publicar" },
     { href: `${base}/campanas`, label: "Campañas" },
     { href: `${base}/flyers`, label: "Flyers con IA" },
     { href: `${base}/rebranding`, label: "Rebranding" },

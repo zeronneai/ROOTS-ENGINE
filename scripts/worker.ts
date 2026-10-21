@@ -32,6 +32,7 @@ import { renderAutoEdit } from "../src/server/render";
 import type { Word } from "../src/lib/edl/types";
 import type { BrollCopy, Direction } from "../src/lib/edl/build";
 import { hybridCopy } from "../src/lib/tour/hybrid";
+import { resolveWaitingPosts } from "../src/server/publishing";
 
 const db = supabaseAdmin();
 const AUTO_RENDER = process.env.AUTO_RENDER === "true";
@@ -371,6 +372,23 @@ async function loop() {
   console.log(`ROOTS ENGINE worker arriba · transcripción: ${process.env.TRANSCRIBE_PROVIDER || "local"} · auto-render: ${AUTO_RENDER}`);
   await sweepStale();
   setInterval(sweepStale, 10 * 60 * 1000);
+  // publicación programada: los posts con video de Dropbox se resuelven 15 min antes de su hora
+  if (process.env.ZERNIO_API_KEY) {
+    let busy = false;
+    const publish = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        await resolveWaitingPosts(db, console.log);
+      } catch (e) {
+        console.error("publicación:", e);
+      } finally {
+        busy = false;
+      }
+    };
+    void publish();
+    setInterval(publish, 60 * 1000);
+  }
   for (;;) {
     const did = (await stepTranscribe()) || (await stepDirect()) || (await stepRender());
     if (!did) await new Promise((r) => setTimeout(r, POLL_MS));

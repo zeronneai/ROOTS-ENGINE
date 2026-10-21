@@ -81,6 +81,7 @@ export default async function VideosPage({ params, searchParams }: { params: Pro
                     <Link href={`/c/${id}/videos/${e.id}`} className="btn btn-ghost">{e.status === "review" ? "Revisar" : "Ver"}</Link>
                   ) : null}
                   {outputs[k] ? <a href={outputs[k]!} className="btn btn-primary">Descargar</a> : null}
+                  {outputs[k] ? <Link href={`/c/${id}/publicar?edit=${e.id}`} className="btn btn-ghost">Programar</Link> : null}
                   {e.status === "failed" ? (
                     <form action={retryEditAction.bind(null, id, e.id)}><SubmitButton className="btn btn-ghost">Reintentar</SubmitButton></form>
                   ) : null}
