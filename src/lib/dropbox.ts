@@ -33,13 +33,18 @@ async function download(url: string, maxMb = 1500) {
 
 function readZip(buf: Buffer): Promise<{ name: string; modified: Date; size: number; read: () => Promise<Buffer> }[]> {
   return new Promise((ok, bad) => {
-    yauzl.fromBuffer(buf, { lazyEntries: true }, (err, zip) => {
+    // Dropbox mete una entrada "/" en el zip de la carpeta y yauzl la rechaza ("absolute path").
+    // Por eso leemos los nombres sin validar y nosotros descartamos los raros.
+    yauzl.fromBuffer(buf, { lazyEntries: true, decodeStrings: false }, (err, zip) => {
       if (err || !zip) return bad(err ?? new Error("zip inválido"));
       const out: { name: string; modified: Date; size: number; read: () => Promise<Buffer> }[] = [];
       zip.on("entry", (e: yauzl.Entry) => {
-        if (!e.fileName.endsWith("/")) {
+        const raw = e.fileName as unknown as Buffer | string;
+        const fileName = (typeof raw === "string" ? raw : raw.toString("utf8")).replace(/\\/g, "/").replace(/^\/+/, "");
+        const safe = fileName && !fileName.endsWith("/") && !fileName.split("/").includes("..");
+        if (safe) {
           out.push({
-            name: e.fileName,
+            name: fileName,
             modified: e.getLastModDate(),
             size: e.uncompressedSize,
             read: () =>
