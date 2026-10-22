@@ -13,6 +13,7 @@ export function SlotForm({ clientId, accounts }: { clientId: string; accounts: A
   const [days, setDays] = useState<number[]>([2, 4]);
   const [time, setTime] = useState("10:00");
   const [picked, setPicked] = useState<string[]>(accounts.map((a) => a.id));
+  const [source, setSource] = useState<"queue" | "dropbox">("queue");
   const [url, setUrl] = useState("");
   const [caption, setCaption] = useState("");
   const [deadline, setDeadline] = useState(3);
@@ -26,7 +27,7 @@ export function SlotForm({ clientId, accounts }: { clientId: string; accounts: A
     setOk(false);
     start(async () => {
       try {
-        await createSlotAction(clientId, { name, weekdays: days, time, timezone: tz, accountIds: picked, dropboxUrl: url, caption, deadlineHours: deadline });
+        await createSlotAction(clientId, { name, weekdays: days, time, timezone: tz, accountIds: picked, source, dropboxUrl: url, caption, deadlineHours: deadline });
         setOk(true);
       } catch (e) {
         setErr((e as Error).message);
@@ -39,8 +40,7 @@ export function SlotForm({ clientId, accounts }: { clientId: string; accounts: A
       <div>
         <div className="font-semibold">Calendario fijo</div>
         <p className="text-xs text-muted">
-          Ej: martes y jueves a las 10:00. El editor sube el video a la carpeta de Dropbox antes de la hora límite y se publica solo. Si junto al video hay
-          un .txt con el mismo nombre, ese es el copy.
+          Ej: martes y jueves a las 10:00. Cada vez sale el siguiente video aprobado de la fila (o lo más nuevo de una carpeta de Dropbox), sin que nadie le pique.
         </p>
       </div>
       <label className="block space-y-1">
@@ -66,7 +66,7 @@ export function SlotForm({ clientId, accounts }: { clientId: string; accounts: A
           <input type="time" className="input" value={time} onChange={(e) => setTime(e.target.value)} />
         </label>
         <label className="block space-y-1">
-          <span className="label">El video debe estar listo</span>
+          <span className="label">{source === "queue" ? "Debe haber uno aprobado" : "El video debe estar listo"}</span>
           <select className="input" value={deadline} onChange={(e) => setDeadline(Number(e.target.value))}>
             {[1, 3, 6, 12, 24, 48].map((h) => <option key={h} value={h}>{h} h antes</option>)}
           </select>
@@ -85,14 +85,31 @@ export function SlotForm({ clientId, accounts }: { clientId: string; accounts: A
           })}
         </div>
       </div>
-      <label className="block space-y-1">
-        <span className="label">Carpeta de Dropbox</span>
-        <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.dropbox.com/scl/fo/..." />
-      </label>
-      <label className="block space-y-1">
-        <span className="label">Copy por defecto (si no hay .txt)</span>
-        <textarea rows={3} className="input" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Déjalo vacío y la IA escribe el copy de cada video viéndolo" />
-      </label>
+      <div className="space-y-1">
+        <span className="label">De dónde sale cada video</span>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {([["queue", "Fila de aprobados", "El siguiente que aprobó el cliente en Aprobar videos"], ["dropbox", "Carpeta de Dropbox", "Lo más nuevo de la carpeta, sin aprobación"]] as const).map(([k, l, h]) => (
+            <button key={k} type="button" onClick={() => setSource(k)} className={`rounded-xl border px-3 py-2 text-left text-xs ${source === k ? "border-purple glow" : "border-line"}`}>
+              <div className="text-sm font-semibold">{l}</div>
+              <div className="text-muted">{h}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+      {source === "dropbox" ? (
+        <>
+          <label className="block space-y-1">
+            <span className="label">Carpeta de Dropbox</span>
+            <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.dropbox.com/scl/fo/..." />
+          </label>
+          <label className="block space-y-1">
+            <span className="label">Copy por defecto (si no hay .txt)</span>
+            <textarea rows={3} className="input" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Déjalo vacío y la IA escribe el copy de cada video viéndolo" />
+          </label>
+        </>
+      ) : (
+        <p className="text-xs text-muted">El copy es el que quedó aprobado en cada video. Si a la hora límite no hay ninguno aprobado, te sale el aviso.</p>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <button className="btn btn-primary" disabled={pending} onClick={submit}>{pending ? <><Spinner /> Guardando...</> : "Crear calendario"}</button>
         {ok ? <span className="text-xs text-ok">Listo, ya quedaron programados los próximos 7 días.</span> : null}

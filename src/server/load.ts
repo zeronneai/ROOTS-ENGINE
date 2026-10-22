@@ -22,11 +22,12 @@ export type Pending = { key: string; text: string; href: string; tone: "todo" | 
 /** Lo que le falta al cliente: preguntas, formulario, ideas por aprobar, videos por revisar. */
 export const loadPendings = cache(async (clientId: string) => {
   const { db, client, brand } = await loadClient(clientId);
-  const [{ data: titled }, { data: ideas }, { count: review }, { count: reports }] = await Promise.all([
+  const [{ data: titled }, { data: ideas }, { count: review }, { count: reports }, { count: toApprove }] = await Promise.all([
     db.from("brand_inputs").select("title").eq("client_id", clientId).not("title", "is", null),
     db.from("content_ideas").select("status").eq("client_id", clientId).eq("status", "idea"),
     db.from("edits").select("id", { count: "exact", head: true }).eq("client_id", clientId).eq("status", "review"),
     db.from("reports").select("id", { count: "exact", head: true }).eq("client_id", clientId),
+    db.from("queue_items").select("id", { count: "exact", head: true }).eq("client_id", clientId).eq("status", "pending"),
   ]);
   const titles = new Set((titled ?? []).map((t) => t.title));
   const openQ = (brand.data.openQuestions ?? []).filter((q) => !titles.has(q)).length;
@@ -36,6 +37,7 @@ export const loadPendings = cache(async (clientId: string) => {
     list.push({ key: "intake", text: "Cuéntanos de tu negocio (5 min). Con eso el análisis sale mucho más preciso.", href: `/intake/${client.intake_token}?back=${base}`, tone: "todo" });
   if (openQ) list.push({ key: "q", text: `Tienes ${openQ} pregunta${openQ > 1 ? "s" : ""} rápida${openQ > 1 ? "s" : ""} por contestar.`, href: `${base}#preguntas`, tone: "todo" });
   if (ideas?.length) list.push({ key: "ideas", text: `${ideas.length} idea${ideas.length > 1 ? "s" : ""} de video esperando tu aprobación.`, href: `${base}/plan`, tone: "todo" });
+  if (toApprove) list.push({ key: "approve", text: `${toApprove} video${toApprove > 1 ? "s" : ""} con copy listo${toApprove > 1 ? "s" : ""} para aprobar.`, href: `${base}/aprobar`, tone: "todo" });
   if (review) list.push({ key: "review", text: `${review} video${review > 1 ? "s" : ""} listo${review > 1 ? "s" : ""} para revisar.`, href: `${base}/videos`, tone: "todo" });
   if (!client.instagram && !client.tiktok)
     list.push({ key: "social", text: "Agrega tu Instagram o TikTok para que podamos analizar lo que ya publicas.", href: `/intake/${client.intake_token}?back=${base}`, tone: "tip" });

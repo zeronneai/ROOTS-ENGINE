@@ -18,14 +18,15 @@ export async function cancelPostAction(clientId: string, postId: string) {
 /** Crea una regla del calendario fijo y programa sus próximos posts. */
 export async function createSlotAction(
   clientId: string,
-  input: { name: string; weekdays: number[]; time: string; timezone: string; accountIds: string[]; dropboxUrl: string; caption: string; deadlineHours: number },
+  input: { name: string; weekdays: number[]; time: string; timezone: string; accountIds: string[]; source?: "dropbox" | "queue"; dropboxUrl: string; caption: string; deadlineHours: number },
 ) {
   await requireClientAccess(clientId);
   const db = supabaseAdmin();
   const weekdays = [...new Set(input.weekdays.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
   if (!weekdays.length) throw new Error("Escoge al menos un día");
   if (!/^\d{2}:\d{2}$/.test(input.time)) throw new Error("Hora inválida");
-  if (!isDropboxFolder(input.dropboxUrl ?? "")) throw new Error("Pega el link de una carpeta de Dropbox (compartida con cualquiera que tenga el link)");
+  const source = input.source === "queue" ? "queue" : "dropbox";
+  if (source === "dropbox" && !isDropboxFolder(input.dropboxUrl ?? "")) throw new Error("Pega el link de una carpeta de Dropbox (compartida con cualquiera que tenga el link)");
   const profileId = await clientProfile(db, clientId);
   const accounts = (await listAccounts(profileId))
     .filter((a) => input.accountIds.includes(a.id))
@@ -38,7 +39,8 @@ export async function createSlotAction(
     time: input.time,
     timezone: input.timezone || "America/Denver",
     accounts,
-    dropbox_url: input.dropboxUrl.trim(),
+    source,
+    dropbox_url: source === "dropbox" ? input.dropboxUrl.trim() : null,
     caption: input.caption.slice(0, 2200),
     deadline_hours: Math.max(0, Math.min(72, Math.round(input.deadlineHours || 0))),
   });

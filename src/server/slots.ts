@@ -15,7 +15,8 @@ export type Slot = {
   time: string;
   timezone: string;
   accounts: { platform: string; accountId: string; label?: string }[];
-  dropbox_url: string;
+  dropbox_url: string | null;
+  source: "dropbox" | "queue";
   caption: string;
   deadline_hours: number;
   active: boolean;
@@ -73,8 +74,8 @@ export async function generateSlotPosts(db: SupabaseClient, clientId?: string) {
         accounts: slot.accounts,
         scheduled_for: d.toISOString(),
         timezone: slot.timezone,
-        media_source: "dropbox_folder",
-        dropbox_url: slot.dropbox_url,
+        media_source: slot.source === "queue" ? "queue" : "dropbox_folder",
+        dropbox_url: slot.source === "queue" ? null : slot.dropbox_url,
         status: "waiting_media",
       }));
     if (rows.length) {
@@ -89,7 +90,7 @@ export async function generateSlotPosts(db: SupabaseClient, clientId?: string) {
 export async function checkDeadlines(db: SupabaseClient, log: (m: string) => void) {
   const { data } = await db
     .from("scheduled_posts")
-    .select("id, dropbox_url, scheduled_for, slot_id, posting_slots(name, deadline_hours)")
+    .select("id, client_id, media_source, dropbox_url, scheduled_for, slot_id, posting_slots(name, deadline_hours)")
     .eq("status", "waiting_media")
     .eq("missing_alerted", false)
     .not("slot_id", "is", null)
@@ -99,11 +100,17 @@ export async function checkDeadlines(db: SupabaseClient, log: (m: string) => voi
     const slot = r.posting_slots as unknown as { name: string; deadline_hours: number } | null;
     const deadline = Date.parse(r.scheduled_for) - (slot?.deadline_hours ?? 3) * 3600_000;
     if (Date.now() < deadline) continue;
-    const ok = await folderHasNew(r.dropbox_url!, await usedNames(db, r.dropbox_url!, r.id));
-    await db
-      .from("scheduled_posts")
-      .update({ missing_alerted: true, error: ok ? null : `Falta el video: a la hora límite no había nada nuevo en la carpeta (${slot?.name ?? "calendario"}). Si se sube antes de la hora, igual se publica.` })
-      .eq("id", r.id);
+    let ok: boolean;
+    let msg: string;
+    if (r.media_source === "queue") {
+      const { count } = await db.from("queue_items").select("id", { count: "exact", head: true }).eq("client_id", r.client_id).eq("status", "approved");
+      ok = (count ?? 0) > 0;
+      msg = `Falta el video: a la hora límite no había ningún video aprobado en la fila (${slot?.name ?? "calendario"}). Si se aprueba uno antes de la hora, igual se publica.`;
+    } else {
+      ok = await folderHasNew(r.dropbox_url!, await usedNames(db, r.dropbox_url!, r.id));
+      msg = `Falta el video: a la hora límite no había nada nuevo en la carpeta (${slot?.name ?? "calendario"}). Si se sube antes de la hora, igual se publica.`;
+    }
+    await db.from("scheduled_posts").update({ missing_alerted: true, error: ok ? null : msg }).eq("id", r.id);
     if (!ok) log(`⚠ falta video para el post ${r.id} (${slot?.name ?? ""})`);
   }
 }

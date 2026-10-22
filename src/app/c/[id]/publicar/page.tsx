@@ -18,7 +18,7 @@ const STATUS: Record<string, { l: string; c: string }> = {
   failed: { l: "Falló", c: "text-bad" },
   canceled: { l: "Cancelado", c: "text-muted" },
 };
-const SOURCE: Record<string, string> = { edit: "Video del motor", upload: "Archivo subido", dropbox_file: "Dropbox", dropbox_folder: "Carpeta de Dropbox", none: "Solo texto" };
+const SOURCE: Record<string, string> = { edit: "Video del motor", upload: "Archivo subido", dropbox_file: "Dropbox", dropbox_folder: "Carpeta de Dropbox", queue: "Fila de aprobados", none: "Solo texto" };
 const NET: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook", youtube: "YouTube" };
 
 type PostView = {
@@ -154,7 +154,7 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
                   <div key={sl.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm">
                     <span className="font-semibold">{sl.name}</span>
                     <span className="chip">{(sl.weekdays as number[]).sort().map((d) => ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"][d]).join(", ")} · {sl.time}</span>
-                    <span className="chip">listo {sl.deadline_hours} h antes</span>
+                    <span className="chip">{sl.source === "queue" ? "fila de aprobados" : "carpeta de Dropbox"} · listo {sl.deadline_hours} h antes</span>
                     {(sl.accounts as { platform: string }[]).map((a, k) => <span key={k} className="chip">{NET[a.platform] ?? a.platform}</span>)}
                     {!sl.active ? <span className="chip text-muted">pausado</span> : null}
                     <span className="ml-auto flex gap-3">

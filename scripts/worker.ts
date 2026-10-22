@@ -35,6 +35,7 @@ import { hybridCopy } from "../src/lib/tour/hybrid";
 import { resolveWaitingPosts } from "../src/server/publishing";
 import { autoCaption } from "../src/server/auto-caption";
 import { checkDeadlines, generateSlotPosts } from "../src/server/slots";
+import { scanFolders } from "../src/server/queue-worker";
 
 const db = supabaseAdmin();
 const AUTO_RENDER = process.env.AUTO_RENDER === "true";
@@ -395,7 +396,8 @@ async function loop() {
     setInterval(publish, 60 * 1000);
   }
   for (;;) {
-    const did = (await stepTranscribe()) || (await stepDirect()) || (await stepRender());
+    // las carpetas de "Aprobar videos" van después de las ediciones (usan el mismo Whisper)
+    const did = (await stepTranscribe()) || (await stepDirect()) || (await stepRender()) || (await scanFolders(db, console.log).catch((e) => (console.error("carpetas:", e), false)));
     if (!did) await new Promise((r) => setTimeout(r, POLL_MS));
   }
 }

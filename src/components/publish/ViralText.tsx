@@ -12,17 +12,19 @@ export function ViralText({
   value,
   onChange,
   suggest,
+  initialHooks,
 }: {
   src: string | null;
   kind: "video" | "image";
   value: OverlayOpts;
   onChange: (v: OverlayOpts) => void;
   suggest: () => Promise<{ hooks: { text: string; angle: string }[]; brandColor: string | null }>;
+  initialHooks?: { text: string; angle: string }[];
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [hooks, setHooks] = useState<{ text: string; angle: string }[]>([]);
+  const [hooks, setHooks] = useState<{ text: string; angle: string }[]>(initialHooks ?? []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [fontReady, setFontReady] = useState(0);

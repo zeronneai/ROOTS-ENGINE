@@ -13,6 +13,7 @@ export function ClientNav({ clientId, isAgency, badge = 0 }: { clientId: string;
     { href: `${base}/plan`, label: "Plan semanal", n: "03" },
     { href: `${base}/campanas`, label: "Campañas", n: "✦" },
     { href: `${base}/videos`, label: "Videos", n: "04" },
+    { href: `${base}/aprobar`, label: "Aprobar videos", n: "✓" },
     { href: `${base}/publicar`, label: "Publicar", n: "✦" },
     { href: `${base}/web`, label: "Sitio web", n: "✦" },
     { href: `${base}/flyers`, label: "Flyers", n: "✦" },

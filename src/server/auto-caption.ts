@@ -1,7 +1,7 @@
 /**
  * Worker: escribe el copy de un video que llegó sin copy (ej. de Dropbox sin .txt).
  * Saca fotos del video con ffmpeg, transcribe con Whisper y le pasa todo a Claude.
- * Se importa dinámico desde publishing.ts para que Vercel no cargue ffmpeg ni Whisper.
+ * Solo lo importa el worker (Vercel no tiene ffmpeg ni Whisper).
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -11,12 +11,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { transcribeWords } from "../lib/transcribe";
 import { generateCaption } from "./captions";
 
-export async function autoCaption(
-  db: SupabaseClient,
-  clientId: string,
-  media: { buffer: Buffer; name: string; kind: "video" | "image" },
-  platforms: string[],
-) {
+/** Fotos del video + lo que se dice, para que la IA sepa de qué trata. */
+export async function analyzeMedia(db: SupabaseClient, clientId: string, media: { buffer: Buffer; name: string; kind: "video" | "image" }) {
   const dir = mkdtempSync(path.join(tmpdir(), "roots-caption-"));
   try {
     const input = path.join(dir, `in${path.extname(media.name) || (media.kind === "image" ? ".jpg" : ".mp4")}`);
@@ -31,8 +27,43 @@ export async function autoCaption(
         transcript = null; // sin audio o Whisper falló: igual se escribe con las fotos
       }
     }
-    const out = await generateCaption(db, clientId, { frames, transcript, platforms });
-    return out.caption;
+    return { frames, transcript };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export async function autoCaption(
+  db: SupabaseClient,
+  clientId: string,
+  media: { buffer: Buffer; name: string; kind: "video" | "image" },
+  platforms: string[],
+) {
+  const { frames, transcript } = await analyzeMedia(db, clientId, media);
+  const out = await generateCaption(db, clientId, { frames, transcript, platforms });
+  return out.caption;
+}
+
+/** Si el video pesa más de lo que acepta el storage, lo baja a 1080p con el peso justo. */
+export function shrinkVideo(buffer: Buffer, name: string, maxMb: number): { buffer: Buffer; name: string } {
+  if (buffer.length <= maxMb * 1e6 * 0.92) return { buffer, name };
+  const dir = mkdtempSync(path.join(tmpdir(), "roots-shrink-"));
+  try {
+    const input = path.join(dir, `in${path.extname(name) || ".mp4"}`);
+    const output = path.join(dir, "out.mp4");
+    writeFileSync(input, buffer);
+    let duration = 30;
+    try {
+      duration = Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", input]).toString().trim()) || 30;
+    } catch {}
+    const kbps = Math.max(1200, Math.min(8000, Math.floor((maxMb * 8e3 * 0.85) / duration) - 160));
+    execFileSync("ffmpeg", [
+      "-v", "error", "-y", "-i", input,
+      "-vf", "scale='if(gt(iw,ih),-2,min(1080,iw))':'if(gt(iw,ih),min(1080,ih),-2)'",
+      "-c:v", "libx264", "-preset", "veryfast", "-b:v", `${kbps}k`, "-maxrate", `${kbps}k`, "-bufsize", `${kbps * 2}k`,
+      "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", output,
+    ]);
+    return { buffer: readFileSync(output), name: name.replace(/\.[^.]+$/, "") + ".mp4" };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

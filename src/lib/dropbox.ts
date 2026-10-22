@@ -98,3 +98,26 @@ export async function folderHasNew(url: string, used: string[]) {
     return false;
   }
 }
+
+export type FolderFile = { name: string; modified: Date; size: number; kind: "video" | "image"; read: () => Promise<Buffer>; caption: string | null };
+
+/** Todos los videos e imágenes de una carpeta compartida (con su .txt de copy si lo hay), del más viejo al más nuevo. */
+export async function listDropboxFolder(url: string): Promise<FolderFile[]> {
+  const { buf, name, type } = await download(url, 4000);
+  const isZip = isDropboxFolder(url) || /zip/i.test(type) || (name ?? "").toLowerCase().endsWith(".zip");
+  if (!isZip) {
+    if (/text\/html/i.test(type)) throw new Error("Dropbox regresó una página en vez del archivo. Revisa que el link sea público.");
+    const fname = name ?? "video.mp4";
+    return [{ name: fname, modified: new Date(), size: buf.length, kind: IMAGE.test(fname) ? "image" : "video", read: async () => buf, caption: null }];
+  }
+  const all = await readZip(buf);
+  const txts = new Map<string, () => Promise<Buffer>>();
+  for (const e of all) if (/\.txt$/i.test(e.name)) txts.set(e.name.replace(/\.txt$/i, "").toLowerCase(), e.read);
+  const media = all.filter((e) => (VIDEO.test(e.name) || IMAGE.test(e.name)) && !/(^|\/)(\.|__MACOSX)/.test(e.name));
+  const out: FolderFile[] = [];
+  for (const e of media.sort((a, b) => a.modified.getTime() - b.modified.getTime())) {
+    const t = txts.get(e.name.replace(/\.[^.]+$/, "").toLowerCase());
+    out.push({ name: e.name, modified: e.modified, size: e.size, kind: IMAGE.test(e.name) ? "image" : "video", read: e.read, caption: t ? (await t()).toString("utf8").trim() || null : null });
+  }
+  return out;
+}

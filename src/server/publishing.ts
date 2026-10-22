@@ -19,7 +19,7 @@ export type PostRow = {
   accounts: { platform: string; accountId: string; label?: string }[];
   scheduled_for: string;
   timezone: string;
-  media_source: "edit" | "upload" | "dropbox_file" | "dropbox_folder" | "none";
+  media_source: "edit" | "upload" | "dropbox_file" | "dropbox_folder" | "queue" | "none";
   edit_id: string | null;
   media_path: string | null;
   dropbox_url: string | null;
@@ -99,11 +99,42 @@ async function resolveMedia(db: SupabaseClient, row: PostRow): Promise<{ buffer:
     const name = row.media_path!.split("/").pop() ?? "video.mp4";
     return { buffer: Buffer.from(await data.arrayBuffer()), name, kind: /\.(jpe?g|png|webp)$/i.test(name) ? "image" : "video" };
   }
+  if (row.media_source === "queue") return takeFromQueue(db, row);
   // Dropbox: en carpetas, no repetir archivos que ya usamos con el mismo link
   const used = row.media_source === "dropbox_folder" ? await usedNames(db, row.dropbox_url!, row.id) : [];
   const m = await fetchDropboxMedia(row.dropbox_url!, used);
   await db.from("scheduled_posts").update({ media_name: m.name }).eq("id", row.id);
   return m;
+}
+
+/** Toma el siguiente video aprobado de la fila (el primero que se aprobó). */
+async function takeFromQueue(db: SupabaseClient, row: PostRow) {
+  const { data: items } = await db
+    .from("queue_items")
+    .select("id, media_path, file_name, kind, caption")
+    .eq("client_id", row.client_id)
+    .eq("status", "approved")
+    .order("approved_at", { ascending: true })
+    .limit(5);
+  for (const it of items ?? []) {
+    const { data: claimed } = await db
+      .from("queue_items")
+      .update({ status: "scheduled", scheduled_post_id: row.id })
+      .eq("id", it.id)
+      .eq("status", "approved")
+      .select("id");
+    if (!claimed?.length) continue;
+    await db.from("scheduled_posts").update({ queue_item_id: it.id, media_name: it.file_name }).eq("id", row.id);
+    const { data, error } = await db.storage.from("recordings").download(it.media_path!);
+    if (error || !data) throw new Error("No se pudo leer el video aprobado");
+    return { buffer: Buffer.from(await data.arrayBuffer()), name: it.file_name as string, kind: it.kind as "video" | "image", caption: (it.caption as string) || null };
+  }
+  throw new Error("No hay videos aprobados en la fila. Aprueba uno en Aprobar videos.");
+}
+
+/** Si el post falla o se cancela, el video regresa a la fila. */
+async function returnToQueue(db: SupabaseClient, postId: string) {
+  await db.from("queue_items").update({ status: "approved", scheduled_post_id: null }).eq("scheduled_post_id", postId).eq("status", "scheduled");
 }
 
 /** Archivos de una carpeta de Dropbox que ya se usaron en otros posts. */
@@ -158,6 +189,7 @@ export async function pushPost(db: SupabaseClient, input: PostRow, opts: { autoC
       .eq("id", row.id);
   } catch (e) {
     await db.from("scheduled_posts").update({ status: "failed", error: (e as Error).message.slice(0, 500) }).eq("id", row.id);
+    await returnToQueue(db, row.id);
     throw e;
   }
 }
@@ -189,6 +221,7 @@ export async function cancelPost(db: SupabaseClient, clientId: string, postId: s
   if (!row) throw new Error("No encontré el post");
   if (row.zernio_post_id && row.status === "scheduled") await deletePost(row.zernio_post_id);
   await db.from("scheduled_posts").update({ status: "canceled" }).eq("id", postId);
+  await returnToQueue(db, postId);
 }
 
 /** Worker: posts con video de Dropbox que se publican en los próximos 15 min. */
