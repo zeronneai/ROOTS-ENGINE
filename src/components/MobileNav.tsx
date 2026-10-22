@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { setPreviewAction } from "@/app/actions";
+import { LogoutButton } from "./LogoutButton";
 
 const I = {
   home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
@@ -43,7 +44,6 @@ export function MobileNav({ clientId, isAgency, badge = 0, previewing = false }:
     { href: `${base}/estilo`, label: "Estilo de edición" },
     ...(isAgency ? [{ href: `${base}/ajustes`, label: "Ajustes" }, { href: "/agency", label: "← Todos los clientes" }] : []),
     { href: "/cuenta", label: "Mi cuenta y contraseña" },
-    { href: "/salir", label: "Cerrar sesión" },
   ];
   const isActive = (href: string) => (href === base ? path === base : path.startsWith(href));
   const moreActive = more.some((m) => m.href !== "/agency" && isActive(m.href));
@@ -72,6 +72,7 @@ export function MobileNav({ clientId, isAgency, badge = 0, previewing = false }:
                 {m.label}
               </Link>
             ))}
+            <LogoutButton className="block w-full rounded-xl px-4 py-3 text-left text-[15px] text-bad" />
           </div>
         </div>
       ) : null}

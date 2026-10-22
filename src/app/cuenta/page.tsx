@@ -1,6 +1,7 @@
 import { requireViewer } from "@/server/auth";
 import { TopBar } from "@/components/Shell";
 import { ChangePassword } from "./ChangePassword";
+import { LogoutButton } from "@/components/LogoutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function CuentaPage() {
           <p className="mt-1 text-sm text-muted">Ponla una vez y ya entras con correo y contraseña, sin esperar correos.</p>
           <ChangePassword />
         </div>
-        <a href="/salir" className="btn btn-ghost mt-4 w-full">Cerrar sesión</a>
+        <LogoutButton className="btn btn-ghost mt-4 w-full" />
       </main>
     </>
   );

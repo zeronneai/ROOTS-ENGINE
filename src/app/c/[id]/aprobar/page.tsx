@@ -60,13 +60,13 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
   const scheduled = by("scheduled").reverse().slice(0, 20);
   const rejected = by("rejected").reverse().slice(0, 20);
 
-  const sign = async (list: Item[]) =>
-    Promise.all(
-      list.map(async (i) => ({
-        ...i,
-        url: i.media_path ? ((await db.storage.from("recordings").createSignedUrl(i.media_path, 60 * 60 * 3)).data?.signedUrl ?? null) : null,
-      })),
-    );
+  // todos los links de los videos en una sola llamada (antes era una por video)
+  const sign = async (list: Item[]) => {
+    const paths = list.map((i) => i.media_path).filter((p): p is string => !!p);
+    const { data } = paths.length ? await db.storage.from("recordings").createSignedUrls(paths, 60 * 60 * 3) : { data: [] };
+    const urls = new Map((data ?? []).map((d) => [d.path, d.signedUrl]));
+    return list.map((i) => ({ ...i, url: i.media_path ? (urls.get(i.media_path) ?? null) : null }));
+  };
   const [pendingViews, approvedViews] = await Promise.all([sign(pendingItems), sign(approved)]);
   const busy = processing.length > 0 || (folders ?? []).some((f) => f.refresh_requested_at);
   const slotDates = (upcoming ?? []).map((u) => u.scheduled_for as string);

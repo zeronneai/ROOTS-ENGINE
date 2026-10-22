@@ -10,6 +10,7 @@ import { addAgencyMemberAction } from "../actions";
 import { createInviteAction, deleteInviteAction } from "../access-actions";
 import { CopyLink } from "@/components/CopyLink";
 import { SubmitButton } from "@/components/SubmitButton";
+import { LogoutButton } from "@/components/LogoutButton";
 
 export default async function AgencyHome() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return <NoBackend />;
@@ -32,7 +33,7 @@ export default async function AgencyHome() {
         right={
           <>
             <a href="/cuenta" className="hidden text-muted hover:text-ink sm:inline">{viewer.email} · Mi cuenta</a>
-            <a href="/salir" className="btn btn-ghost !py-1.5 text-xs">Cerrar sesión</a>
+            <LogoutButton className="btn btn-ghost !py-1.5 text-xs" />
           </>
         }
       />

@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { loadClient } from "@/server/load";
 import { Empty, PageTitle } from "@/components/Shell";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -39,19 +40,8 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
   const { db, client } = await loadClient(id);
   const ready = !!process.env.ZERNIO_API_KEY;
 
-  let accounts: SocialAccount[] = [];
-  let accountsError: string | null = null;
-  const { data: row } = await supabaseAdmin().from("clients").select("zernio_profile_id").eq("id", id).single();
-  if (ready && row?.zernio_profile_id) {
-    try {
-      accounts = await listAccounts(row.zernio_profile_id);
-    } catch (e) {
-      accountsError = (e as Error).message;
-    }
-    await syncPosts(supabaseAdmin(), id);
-  }
-
-  const [{ data: posts }, { data: edits }, { data: slots }] = await Promise.all([
+  // las consultas a la base corren al mismo tiempo que la de Zernio
+  const dbData = Promise.all([
     db.from("scheduled_posts").select("*").eq("client_id", id).order("scheduled_for", { ascending: false }).limit(40),
     db
       .from("edits")
@@ -63,6 +53,21 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
       .limit(30),
     db.from("posting_slots").select("*").eq("client_id", id).order("created_at"),
   ]);
+
+  let accounts: SocialAccount[] = [];
+  let accountsError: string | null = null;
+  const { data: row } = await supabaseAdmin().from("clients").select("zernio_profile_id").eq("id", id).single();
+  if (ready && row?.zernio_profile_id) {
+    try {
+      accounts = await listAccounts(row.zernio_profile_id);
+    } catch (e) {
+      accountsError = (e as Error).message;
+    }
+    // revisar en Zernio cómo van los posts ya no frena la página: corre después de mandarla
+    after(() => syncPosts(supabaseAdmin(), id).catch(() => {}));
+  }
+
+  const [{ data: posts }, { data: edits }, { data: slots }] = await dbData;
   type EditRow = { id: string; created_at: string; idea_id: string | null; output_path: string | null; recordings: { original_name: string } | null; content_ideas: { title: string; caption: string | null; hashtags: string[] | null } | null };
   const editOptions = ((edits ?? []) as unknown as EditRow[]).map((e) => ({
     id: e.id,
