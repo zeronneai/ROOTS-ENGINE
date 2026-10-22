@@ -126,7 +126,7 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
               ) : (
                 <p className="text-sm text-muted">Todavía no hay redes conectadas. El dueño de la cuenta tiene que entrar con su usuario y dar permiso.</p>
               )}
-              <ConnectSocial clientId={id} />
+              <ConnectSocial clientId={id} connected={accounts.filter((a) => a.healthy).map((a) => a.platform)} broken={accounts.filter((a) => !a.healthy).map((a) => a.platform)} />
             </div>
 
             {slots?.length ? (

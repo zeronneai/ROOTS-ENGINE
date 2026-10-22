@@ -9,8 +9,8 @@ const NETS: [string, string, string][] = [
   ["youtube", "YouTube", "▶️"],
 ];
 
-/** Botones para conectar las redes del cliente (abren el permiso de cada red). */
-export function ConnectSocial({ clientId }: { clientId: string }) {
+/** Botones para conectar las redes que faltan (y reconectar las que perdieron el permiso). */
+export function ConnectSocial({ clientId, connected = [], broken = [] }: { clientId: string; connected?: string[]; broken?: string[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   async function go(platform: string) {
@@ -26,10 +26,18 @@ export function ConnectSocial({ clientId }: { clientId: string }) {
       setBusy(null);
     }
   }
+  const missing = NETS.filter(([id]) => !connected.includes(id) && !broken.includes(id));
+  const toFix = NETS.filter(([id]) => broken.includes(id) && !connected.includes(id));
+  if (!missing.length && !toFix.length) return null;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {NETS.map(([id, label, icon]) => (
+        {toFix.map(([id, label, icon]) => (
+          <button key={id} type="button" className="btn btn-primary" disabled={!!busy} onClick={() => go(id)}>
+            {busy === id ? <Spinner /> : <span>{icon}</span>} Reconectar {label}
+          </button>
+        ))}
+        {missing.map(([id, label, icon]) => (
           <button key={id} type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => go(id)}>
             {busy === id ? <Spinner /> : <span>{icon}</span>} Conectar {label}
           </button>

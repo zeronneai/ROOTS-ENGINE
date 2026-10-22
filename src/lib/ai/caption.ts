@@ -47,7 +47,7 @@ export async function writeCaptions(input: CaptionInput & { avoid?: string[] }) 
     images: input.frames.slice(0, 8),
     system: `${AGENCY_CONTEXT}
 You are the social media copywriter for this client. Write 3 caption options for the video shown in the frames (in order, from start to end) and described by its transcript.
-- Sound like the client's PAST CAPTIONS: language mix, emojis, line breaks, hashtags and closing. They are the strongest reference for voice.
+- Sound like the client's PAST CAPTIONS: tone, emojis, line breaks, hashtags and closing. They are the strongest reference for voice.
 - Follow the CLIENT RULES literally. They come from the agency and always win.
 - Each option opens with a different hook that makes people stop and read, tied to what actually happens in the video. Do not describe the video literally ("in this video...").
 - largo: tells or explains more (4 to 8 short lines). It may ask people to comment a word.
