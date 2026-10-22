@@ -24,6 +24,7 @@ type Item = {
   caption: string;
   hooks: { text: string; angle: string }[];
   captions: { kind: string; text: string }[] | null;
+  version: number | null;
   media_path: string | null;
   overlay_text: string | null;
   approved_at: string | null;
@@ -43,7 +44,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
     db.from("content_folders").select("*").eq("client_id", id).order("created_at"),
     db
       .from("queue_items")
-      .select("id, file_name, kind, status, caption, hooks, captions, media_path, overlay_text, approved_at, approved_by, error, created_at, scheduled_posts!queue_items_scheduled_post_id_fkey(status, scheduled_for, results)")
+      .select("id, file_name, kind, status, caption, hooks, captions, version, media_path, overlay_text, approved_at, approved_by, error, created_at, scheduled_posts!queue_items_scheduled_post_id_fkey(status, scheduled_for, results)")
       .eq("client_id", id)
       .order("created_at", { ascending: true })
       .limit(200),
@@ -102,7 +103,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
           </form>
           <p className="text-xs text-muted">
             El worker de tu compu baja los videos, se salta los que ya estaban (aunque les cambien el nombre), escribe el copy y 3 textos virales, y le avisa
-            por correo al cliente. Se revisa sola cada hora, o al instante con &quot;Buscar videos nuevos&quot;. Si el editor deja un .txt con el mismo nombre del
+            por correo al cliente. Para corregir un video, súbelo con el mismo nombre: se reemplaza en su tarjeta y se conserva el copy. Se revisa sola cada hora, o al instante con &quot;Buscar videos nuevos&quot;. Si el editor deja un .txt con el mismo nombre del
             video, ese es el copy.
           </p>
         </section>
@@ -136,7 +137,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
       <section className="mb-10 space-y-4">
         <h2 className="text-lg font-semibold">Por aprobar {pendingViews.length ? <span className="chip ml-1">{pendingViews.length}</span> : null}</h2>
         {pendingViews.length ? (
-          pendingViews.map((i) => <QueueCard key={i.id} clientId={id} item={{ id: i.id, file_name: i.file_name, kind: i.kind, caption: i.caption, hooks: i.hooks ?? [], captions: i.captions ?? [], url: i.url } satisfies QueueItemView} />)
+          pendingViews.map((i) => <QueueCard key={i.id} clientId={id} item={{ id: i.id, file_name: i.file_name, kind: i.kind, caption: i.caption, hooks: i.hooks ?? [], captions: i.captions ?? [], version: i.version ?? 1, url: i.url } satisfies QueueItemView} />)
         ) : (
           <p className="text-sm text-muted">No hay videos esperando. Cuando el editor suba nuevos, aparecen aquí{isAgency ? "" : " y te llega un correo"}.</p>
         )}

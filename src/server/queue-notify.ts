@@ -17,7 +17,7 @@ export async function notifyNewForApproval(db: SupabaseClient, clientId: string,
   const { html, text } = simpleEmail(
     `${total} video${total > 1 ? "s" : ""} listo${total > 1 ? "s" : ""} para aprobar`,
     [
-      `Hola, ya subimos ${added} video${added > 1 ? "s" : ""} nuevo${added > 1 ? "s" : ""} para ${client?.name ?? "tu marca"}, cada uno con su copy listo.`,
+      `Hola, ya subimos ${added} video${added > 1 ? "s" : ""} nuevo${added > 1 ? "s" : ""} o corregido${added > 1 ? "s" : ""} para ${client?.name ?? "tu marca"}, cada uno con su copy listo.`,
       "Revísalos, cambia lo que quieras y dale Aprobar. Los aprobados se publican solos en los días y horas que acordamos.",
     ],
     { label: "Revisar videos", href: `${appUrl()}/c/${clientId}/aprobar` },

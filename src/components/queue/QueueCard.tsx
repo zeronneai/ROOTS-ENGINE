@@ -16,6 +16,7 @@ export type QueueItemView = {
   caption: string;
   hooks: { text: string; angle: string }[];
   captions: CaptionOpt[];
+  version: number;
   url: string | null;
 };
 
@@ -95,7 +96,10 @@ export function QueueCard({ clientId, item }: { clientId: string; item: QueueIte
         )}
       </div>
       <div className="min-w-0 space-y-3">
-        <div className="truncate text-xs text-muted" title={item.file_name}>{item.file_name}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="truncate text-xs text-muted" title={item.file_name}>{item.file_name}</span>
+          {item.version > 1 ? <span className="chip text-xs text-warn">Versión {item.version}: el editor corrigió el video</span> : null}
+        </div>
         <div className="space-y-1">
           <span className="label">Escoge un copy</span>
           <CaptionPicker options={options} selected={caption} onPick={(t) => { setCaption(t); setSaved(false); }} onMore={moreCaptions} />

@@ -32,8 +32,12 @@ export async function scanFolders(db: SupabaseClient, log: (m: string) => void) 
     did = true;
     try {
       const r = await runWithClient(folder.client_id, () => scanFolder(db, folder, log));
-      const msg = r.added
-        ? `${r.added} video${r.added > 1 ? "s" : ""} nuevo${r.added > 1 ? "s" : ""} para aprobar${r.more ? ", siguen más" : ""}`
+      const parts = [
+        r.added ? `${r.added} nuevo${r.added > 1 ? "s" : ""}` : "",
+        r.replaced ? `${r.replaced} corregido${r.replaced > 1 ? "s" : ""}` : "",
+      ].filter(Boolean);
+      const msg = parts.length
+        ? `${parts.join(" y ")} para aprobar${r.more ? ", siguen más" : ""}`
         : r.failed
           ? `${r.failed} no se pudieron preparar`
           : "Sin videos nuevos";
@@ -41,7 +45,7 @@ export async function scanFolders(db: SupabaseClient, log: (m: string) => void) 
         .from("content_folders")
         .update({ last_result: msg, ...(r.more ? { refresh_requested_at: new Date().toISOString() } : {}) })
         .eq("id", folder.id);
-      if (r.added) await notifyNewForApproval(db, folder.client_id, r.added, log);
+      if (r.added || r.replaced) await notifyNewForApproval(db, folder.client_id, r.added + r.replaced, log);
     } catch (e) {
       log(`✗ carpeta ${folder.name}: ${(e as Error).message}`);
       await db.from("content_folders").update({ last_result: `Error: ${(e as Error).message}`.slice(0, 300) }).eq("id", folder.id);
@@ -54,20 +58,23 @@ async function scanFolder(db: SupabaseClient, folder: Folder, log: (m: string) =
   log(`→ revisando carpeta "${folder.name}"`);
   const files = await listDropboxFolder(folder.dropbox_url);
   const [{ data: known }, { data: posted }] = await Promise.all([
-    db.from("queue_items").select("file_hash, file_name, file_size").eq("client_id", folder.client_id),
+    db.from("queue_items").select("id, file_hash, file_name, status, version, created_at").eq("client_id", folder.client_id).eq("folder_id", folder.id).order("created_at"),
     db.from("scheduled_posts").select("media_name").eq("client_id", folder.client_id).eq("dropbox_url", folder.dropbox_url).not("media_name", "is", null),
   ]);
-  const hashes = new Set((known ?? []).map((k) => k.file_hash));
-  const nameSize = new Set((known ?? []).map((k) => `${k.file_name}|${k.file_size}`));
+  const { data: allHashes } = await db.from("queue_items").select("file_hash").eq("client_id", folder.client_id);
+  const hashes = new Set((allHashes ?? []).map((k) => k.file_hash));
+  // el último video de la carpeta con ese nombre (para detectar versiones corregidas)
+  const byName = new Map((known ?? []).map((k) => [k.file_name as string, k as { id: string; status: string; version: number }]));
   const alreadyPosted = new Set((posted ?? []).map((p) => p.media_name as string));
   const footer = await clientFooter(db, folder.client_id);
 
   let added = 0;
+  let replaced = 0;
   let failed = 0;
   let more = false;
   for (const f of files) {
-    if (nameSize.has(`${f.name}|${f.size}`) || alreadyPosted.has(f.name)) continue;
-    if (added + failed >= MAX_PER_RUN) {
+    if (alreadyPosted.has(f.name) && !byName.has(f.name)) continue;
+    if (added + replaced + failed >= MAX_PER_RUN) {
       more = true;
       break;
     }
@@ -75,6 +82,29 @@ async function scanFolder(db: SupabaseClient, folder: Folder, log: (m: string) =
     const hash = createHash("sha256").update(raw).digest("hex");
     if (hashes.has(hash)) continue;
     hashes.add(hash);
+
+    // mismo nombre que uno que todavía no se publica = el editor lo corrigió: se reemplaza en la misma tarjeta
+    const prev = byName.get(f.name);
+    if (prev && ["pending", "approved", "rejected"].includes(prev.status)) {
+      try {
+        const media = f.kind === "video" ? shrinkVideo(raw, f.name, MAX_UPLOAD_MB) : { buffer: raw, name: f.name };
+        const ext = (media.name.split(".").pop() || "mp4").toLowerCase();
+        const version = (prev.version ?? 1) + 1;
+        const mediaPath = `${folder.client_id}/queue/${prev.id}-v${version}.${ext}`;
+        const { error: upErr } = await db.storage.from("recordings").upload(mediaPath, media.buffer, { contentType: mimeFor(media.name), upsert: true });
+        if (upErr) throw new Error(`No se pudo guardar el video: ${upErr.message}`);
+        await db
+          .from("queue_items")
+          .update({ file_hash: hash, file_size: f.size, media_path: mediaPath, version, replaced_at: new Date().toISOString(), status: "pending", approved_at: null, overlay_text: null, error: null })
+          .eq("id", prev.id);
+        log(`   ↺ ${f.name}: versión ${version} (se conserva el copy)`);
+        replaced++;
+      } catch (e) {
+        failed++;
+        log(`   ✗ ${f.name}: ${(e as Error).message}`);
+      }
+      continue;
+    }
 
     const { data: item } = await db
       .from("queue_items")
@@ -106,6 +136,6 @@ async function scanFolder(db: SupabaseClient, folder: Folder, log: (m: string) =
       await db.from("queue_items").update({ status: "failed", error: (e as Error).message.slice(0, 500) }).eq("id", item.id);
     }
   }
-  log(`   listo: ${added} nuevos${failed ? `, ${failed} con error` : ""}${more ? " (siguen más)" : ""}`);
-  return { added, failed, more };
+  log(`   listo: ${added} nuevos${replaced ? `, ${replaced} corregidos` : ""}${failed ? `, ${failed} con error` : ""}${more ? " (siguen más)" : ""}`);
+  return { added, replaced, failed, more };
 }
