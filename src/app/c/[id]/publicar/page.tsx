@@ -3,7 +3,7 @@ import { Empty, PageTitle } from "@/components/Shell";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConnectSocial } from "@/components/publish/ConnectSocial";
 import { PostScheduler } from "@/components/publish/PostScheduler";
-import { cancelPostAction, deleteSlotAction, saveCaptionRulesAction, toggleSlotAction } from "@/app/publish-actions";
+import { cancelPostAction, deleteSlotAction, toggleSlotAction } from "@/app/publish-actions";
 import { SlotForm } from "@/components/publish/SlotForm";
 import { listAccounts, type SocialAccount } from "@/lib/zernio";
 import { syncPosts } from "@/server/publishing";
@@ -36,12 +36,12 @@ function splitPosts(list: PostView[]) {
 export default async function PublishPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string; conectada?: string }> }) {
   const { id } = await params;
   const { edit, conectada } = await searchParams;
-  const { db, client, isAgency } = await loadClient(id);
+  const { db, client } = await loadClient(id);
   const ready = !!process.env.ZERNIO_API_KEY;
 
   let accounts: SocialAccount[] = [];
   let accountsError: string | null = null;
-  const { data: row } = await supabaseAdmin().from("clients").select("zernio_profile_id, caption_rules, caption_footer").eq("id", id).single();
+  const { data: row } = await supabaseAdmin().from("clients").select("zernio_profile_id").eq("id", id).single();
   if (ready && row?.zernio_profile_id) {
     try {
       accounts = await listAccounts(row.zernio_profile_id);
@@ -128,24 +128,6 @@ export default async function PublishPage({ params, searchParams }: { params: Pr
               )}
               <ConnectSocial clientId={id} />
             </div>
-
-            {isAgency ? (
-              <details className="card p-5" open={!row?.caption_rules && !row?.caption_footer}>
-                <summary className="cursor-pointer font-semibold">Cómo escribe el copy la IA</summary>
-                <form action={saveCaptionRulesAction.bind(null, id)} className="mt-3 space-y-3">
-                  <label className="block space-y-1">
-                    <span className="label">Reglas fijas</span>
-                    <textarea name="caption_rules" rows={4} className="input text-sm" defaultValue={row?.caption_rules ?? ""} placeholder="Ej: cierra con el teléfono y consulta gratis, hashtags de cajón #elpaso..., nunca digas..." />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="label">Cierre que siempre va al final</span>
-                    <input name="caption_footer" className="input text-sm" defaultValue={row?.caption_footer ?? ""} placeholder="Ej: 📱 915-400-1099 FREE consultation." />
-                  </label>
-                  <p className="text-xs text-muted">El cierre se agrega a todos los posts de este cliente, aunque el copy lo escribas tú. Si el copy ya trae el teléfono, no lo repite. Además, la IA copia el estilo de los últimos posts del cliente.</p>
-                  <SubmitButton className="btn btn-ghost text-sm">Guardar</SubmitButton>
-                </form>
-              </details>
-            ) : null}
 
             {slots?.length ? (
               <div className="card space-y-3 p-5">

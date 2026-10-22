@@ -80,5 +80,5 @@ export async function saveCaptionRulesAction(clientId: string, form: FormData) {
     .from("clients")
     .update({ caption_rules: val("caption_rules", 2000), caption_footer: val("caption_footer", 300) })
     .eq("id", clientId);
-  revalidatePath(`/c/${clientId}/publicar`);
+  revalidatePath(`/c/${clientId}/aprobar`);
 }

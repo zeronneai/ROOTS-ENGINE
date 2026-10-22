@@ -14,6 +14,7 @@ import {
   retryItemAction,
   toggleFolderAutoAction,
 } from "@/app/queue-actions";
+import { saveCaptionRulesAction } from "@/app/publish-actions";
 
 type Item = {
   id: string;
@@ -38,7 +39,7 @@ const NET: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", 
 export default async function ApprovePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { db, client, isAgency } = await loadClient(id);
-  const [{ data: folders }, { data: rows }, { data: upcoming }] = await Promise.all([
+  const [{ data: folders }, { data: rows }, { data: upcoming }, { data: rules }] = await Promise.all([
     db.from("content_folders").select("*").eq("client_id", id).order("created_at"),
     db
       .from("queue_items")
@@ -47,6 +48,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
       .order("created_at", { ascending: true })
       .limit(200),
     db.from("scheduled_posts").select("scheduled_for").eq("client_id", id).eq("media_source", "queue").eq("status", "waiting_media").order("scheduled_for").limit(30),
+    db.from("clients").select("caption_rules, caption_footer").eq("id", id).single(),
   ]);
   const items = (rows ?? []) as unknown as Item[];
   const by = (s: string) => items.filter((i) => i.status === s);
@@ -104,6 +106,24 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
             video, ese es el copy.
           </p>
         </section>
+      ) : null}
+
+      {isAgency ? (
+        <details className="card mb-8 p-5" open={!rules?.caption_rules && !rules?.caption_footer}>
+          <summary className="cursor-pointer font-semibold">Reglas del copy (cómo escribe la IA)</summary>
+          <form action={saveCaptionRulesAction.bind(null, id)} className="mt-3 space-y-3">
+            <label className="block space-y-1">
+              <span className="label">Reglas fijas</span>
+              <textarea name="caption_rules" rows={4} className="input text-sm" defaultValue={rules?.caption_rules ?? ""} placeholder="Ej: cierra con el teléfono y consulta gratis, hashtags de cajón #elpaso..., nunca digas..." />
+            </label>
+            <label className="block space-y-1">
+              <span className="label">Cierre que siempre va al final</span>
+              <input name="caption_footer" className="input text-sm" defaultValue={rules?.caption_footer ?? ""} placeholder="Ej: 📱 915-400-1099 FREE consultation." />
+            </label>
+            <p className="text-xs text-muted">El cierre se agrega a todos los posts de este cliente, aunque el copy lo escribas tú. Si el copy ya trae el teléfono, no lo repite. Además, la IA copia el estilo de los últimos posts del cliente.</p>
+            <SubmitButton className="btn btn-ghost text-sm">Guardar</SubmitButton>
+          </form>
+        </details>
       ) : null}
 
       {processing.length ? (
