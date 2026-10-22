@@ -53,7 +53,7 @@ You are the social media copywriter for this client. Write 3 caption options for
 - largo: tells or explains more (4 to 8 short lines). It may ask people to comment a word.
 - corto: 1 or 2 short lines after the hook.
 - directo: must NEVER ask people to comment, reply, drop an emoji, tag someone or "write below". Its call to action is to call, DM, WhatsApp, book or visit.
-- Write in the language spoken in the video. If nobody talks, use the language the client posts in most.
+- LANGUAGE: the 3 options are fully in the language spoken in the video (see the transcript), without mixing languages, even if the brand is bilingual. If nobody talks, use the language the client posts in most. A fixed closing line from the rules may stay as it is.
 - Never invent prices, discounts, promos, dates, addresses or phone numbers that are not in the brand, rules or video.
 - If the client has a fixed closing line, end every option with it (adapted to the caption's language if the rules say so).
 - No em dashes or long dashes.`,
@@ -89,13 +89,14 @@ export function withFooter(caption: string, footer: string | null | undefined) {
 }
 
 const HooksSchema = z.object({
+  language: z.enum(["es", "en"]).describe("Decide first: the ONE language spoken in the video. All 3 hooks are written only in this language"),
   hooks: z
     .array(z.object({ text: z.string().describe("Máximo 9 palabras, se lee en 2 segundos"), angle: z.string().describe("El ángulo en 2 o 3 palabras: POV, pregunta, contraste, secreto, reto...") }))
     .describe("Exactamente 3, cada una con un ángulo distinto"),
 });
 
 /** 3 textos virales para poner encima del video. */
-export async function writeHooks(input: Omit<CaptionInput, "footer" | "platforms">) {
+export async function writeHooks(input: Omit<CaptionInput, "footer" | "platforms"> & { language?: "es" | "en" | null }) {
   const b = input.brand;
   const out = await structured({
     schema: HooksSchema,
@@ -105,8 +106,8 @@ export async function writeHooks(input: Omit<CaptionInput, "footer" | "platforms
     system: `${AGENCY_CONTEXT}
 You write the on-screen text hook that goes on top of a short vertical video (Reels, TikTok). The frames are in order from start to end.
 - It must make a scroller stop in the first second: curiosity, tension, a relatable POV, a bold claim, a question, a contrast. Tied to what really happens in the video.
-- Max 9 words. Natural, the way people from El Paso / Juárez talk online. One emoji at most, only if it adds.
-- Write in the language spoken in the video; if nobody talks, the language the client posts in most.
+- Max 9 words. Natural, the way people talk online. One emoji at most, only if it adds.
+- LANGUAGE: every hook is 100% in the language spoken in the video (see the transcript). If the video is in English, all 3 are fully in English; if it is in Spanish, all 3 are fully in Spanish. Never mix languages inside a hook and never across the 3, even if the brand is bilingual. If nobody talks, use the language the client posts in most.
 - 3 options with clearly different angles. Never invent prices, promos or facts. Follow CLIENT RULES.
 - No em dashes or long dashes. No hashtags.`,
     user: `CLIENT: ${json(input.client)}
@@ -115,6 +116,7 @@ ACTIVE MOOD: ${input.mood ? json(input.mood) : "none"}
 CLIENT RULES: ${input.rules?.trim() || "none"}
 PAST CAPTIONS (for voice): ${json(input.examples.slice(0, 6))}
 TRANSCRIPT OF THE VIDEO: ${input.transcript?.trim() ? json(input.transcript.slice(0, 3000)) : "(no speech or not available)"}
+${input.language ? `THE VIDEO IS IN ${input.language === "en" ? "ENGLISH: write all 3 hooks only in English" : "SPANISH: write all 3 hooks only in Spanish"}.` : ""}
 ${input.hint?.trim() ? `NOTES FROM THE TEAM: ${json(input.hint)}` : ""}`,
   });
   return out.hooks.slice(0, 3).map((h) => ({ ...h, text: h.text.replace(/\s*[—–]\s*/g, ", ").trim() }));

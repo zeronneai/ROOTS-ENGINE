@@ -49,7 +49,7 @@ export function QueueCard({ clientId, item }: { clientId: string; item: QueueIte
     const res = await fetch(`/api/clients/${clientId}/social/caption`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "hooks", frames }),
+      body: JSON.stringify({ kind: "hooks", frames, itemId: item.id }),
     });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error ?? "No se pudieron sugerir textos");

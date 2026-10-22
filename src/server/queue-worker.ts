@@ -122,9 +122,11 @@ async function scanFolder(db: SupabaseClient, folder: Folder, log: (m: string) =
 
       const { frames, transcript } = await analyzeMedia(db, folder.client_id, { buffer: media.buffer, name: media.name, kind: f.kind });
       // 3 opciones de copy; si el editor dejó un .txt, ese va primero y es el que queda escogido
-      const options = (await generateCaptions(db, folder.client_id, { frames, transcript })).options;
+      const written = await generateCaptions(db, folder.client_id, { frames, transcript });
+      const options = written.options;
       if (f.caption) options.unshift({ kind: "editor", text: withFooter(f.caption, footer) });
-      const hooks = f.kind === "video" ? (await generateHooks(db, folder.client_id, { frames, transcript })).hooks : [];
+      // los textos virales en el mismo idioma que el video (el que detectó la IA al escribir los copys)
+      const hooks = f.kind === "video" ? (await generateHooks(db, folder.client_id, { frames, transcript, language: written.language })).hooks : [];
       await db
         .from("queue_items")
         .update({ media_path: mediaPath, caption: options[0].text.slice(0, 2200), captions: options, transcript, hooks, status: "pending", error: null })

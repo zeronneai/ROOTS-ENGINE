@@ -71,10 +71,10 @@ export async function clientFooter(db: SupabaseClient, clientId: string) {
   return (data?.caption_footer as string | null) ?? null;
 }
 
-export async function generateHooks(db: SupabaseClient, clientId: string, opts: { frames: CaptionInput["frames"]; transcript?: string | null; hint?: string | null }) {
+export async function generateHooks(db: SupabaseClient, clientId: string, opts: { frames: CaptionInput["frames"]; transcript?: string | null; hint?: string | null; language?: "es" | "en" | null }) {
   const ctx = await captionContext(db, clientId);
   const { data } = await db.from("brand_profiles").select("data").eq("client_id", clientId).maybeSingle();
   const accent = ((data?.data ?? {}) as Partial<BrandBrain>).visual?.accentColor ?? null;
-  const hooks = await writeHooks({ client: ctx.client, brand: ctx.brand, mood: ctx.mood, rules: ctx.rules, examples: ctx.examples, frames: opts.frames, transcript: opts.transcript ?? null, hint: opts.hint });
+  const hooks = await writeHooks({ client: ctx.client, brand: ctx.brand, mood: ctx.mood, rules: ctx.rules, examples: ctx.examples, frames: opts.frames, transcript: opts.transcript ?? null, hint: opts.hint, language: opts.language });
   return { hooks, brandColor: accent };
 }
