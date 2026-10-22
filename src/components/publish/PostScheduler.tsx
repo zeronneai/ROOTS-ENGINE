@@ -7,6 +7,7 @@ import { compressIfNeeded } from "@/lib/compress-video";
 import { grabFrames } from "@/lib/video-frames";
 import { burnText, burnTextImage, type OverlayOpts } from "@/lib/overlay-text";
 import { DEFAULT_OVERLAY, ViralText } from "./ViralText";
+import { CaptionPicker, type CaptionOpt } from "./CaptionPicker";
 
 type Account = { id: string; platform: string; name: string };
 type EditOption = { id: string; title: string; caption: string | null; ideaId: string | null; outputPath: string | null };
@@ -38,7 +39,7 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [hint, setHint] = useState("");
-  const [writing, setWriting] = useState(false);
+  const [options, setOptions] = useState<CaptionOpt[]>([]);
   const [overlay, setOverlay] = useState<OverlayOpts>(DEFAULT_OVERLAY);
   // el video que se está viendo (para la IA y la vista previa del texto)
   const editPath = source === "edit" ? (edits.find((e) => e.id === editId)?.outputPath ?? null) : null;
@@ -119,30 +120,24 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
     if (e?.caption && !caption.trim()) setCaption(e.caption);
   }
 
-  /** La IA ve el video (fotos + lo que se dice) y escribe el copy con el tono del cliente. */
+  /** La IA ve el video (fotos + lo que se dice) y escribe 3 copys con el tono del cliente. */
   async function writeWithAi() {
-    setErr(null);
-    setWriting(true);
-    try {
-      if (source === "upload" && !file) throw new Error("Primero escoge el archivo");
-      const res = await fetch(`/api/clients/${clientId}/social/caption`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          frames: await framesOfMedia(),
-          editId: source === "edit" ? editId : null,
-          hint: [hint, overlay.text.trim() ? `On-screen text of the video: ${overlay.text}` : ""].filter(Boolean).join(". "),
-          platforms: accounts.filter((a) => picked.includes(a.id)).map((a) => a.platform),
-        }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "No se pudo escribir el copy");
-      setCaption(j.result.caption);
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setWriting(false);
-    }
+    if (source === "upload" && !file) throw new Error("Primero escoge el archivo");
+    const res = await fetch(`/api/clients/${clientId}/social/caption`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        frames: await framesOfMedia(),
+        editId: source === "edit" ? editId : null,
+        hint: [hint, overlay.text.trim() ? `On-screen text of the video: ${overlay.text}` : ""].filter(Boolean).join(". "),
+        platforms: accounts.filter((a) => picked.includes(a.id)).map((a) => a.platform),
+        avoid: options.map((o) => o.text),
+      }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error ?? "No se pudo escribir el copy");
+    setOptions(j.result.options);
+    if (!caption.trim() || options.some((o) => o.text.trim() === caption.trim())) setCaption(j.result.options[0].text);
   }
 
   async function submit() {
@@ -255,16 +250,16 @@ export function PostScheduler({ clientId, accounts, edits, defaultEdit }: { clie
       ) : null}
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="label">Copy</span>
-          {source === "edit" || source === "upload" ? (
-            <button type="button" className="btn btn-ghost text-sm" disabled={writing || (source === "upload" && !file)} onClick={writeWithAi}>
-              {writing ? <><Spinner /> Viendo el video...</> : "✨ Escribir copy con IA"}
-            </button>
-          ) : null}
-        </div>
+        <span className="label">Copy</span>
         {source === "edit" || source === "upload" ? (
-          <input className="input text-sm" value={hint} onChange={(e) => setHint(e.target.value)} placeholder="Contexto para la IA (opcional): promo, evento, a quién va dirigido..." />
+          <>
+            <input className="input text-sm" value={hint} onChange={(e) => setHint(e.target.value)} placeholder="Contexto para la IA (opcional): promo, evento, a quién va dirigido..." />
+            {source === "upload" && !file ? (
+              <p className="text-xs text-muted">Escoge el video y la IA te escribe 3 copys: largo, corto y uno sin pedir comentarios.</p>
+            ) : (
+              <CaptionPicker options={options} selected={caption} onPick={setCaption} onMore={writeWithAi} />
+            )}
+          </>
         ) : null}
         <textarea rows={6} className="input" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="El texto del post, con hashtags" />
         {source.startsWith("dropbox") ? (

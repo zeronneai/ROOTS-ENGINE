@@ -3,7 +3,7 @@
  * Sin "server-only": el worker también lo usa.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { writeCaption, writeHooks, type CaptionInput } from "../lib/ai/caption";
+import { writeCaption, writeCaptions, writeHooks, type CaptionInput } from "../lib/ai/caption";
 import type { BrandBrain } from "../lib/types";
 
 export async function captionContext(db: SupabaseClient, clientId: string) {
@@ -53,6 +53,16 @@ export async function generateCaption(
 ) {
   const ctx = await captionContext(db, clientId);
   return writeCaption({ ...ctx, frames: opts.frames, transcript: opts.transcript ?? null, hint: opts.hint, platforms: opts.platforms });
+}
+
+/** 3 copys (largo, corto, sin pedir comentarios). `avoid` = los que ya se propusieron, para que salgan otros. */
+export async function generateCaptions(
+  db: SupabaseClient,
+  clientId: string,
+  opts: { frames: CaptionInput["frames"]; transcript?: string | null; hint?: string | null; platforms?: string[]; avoid?: string[] },
+) {
+  const ctx = await captionContext(db, clientId);
+  return writeCaptions({ ...ctx, frames: opts.frames, transcript: opts.transcript ?? null, hint: opts.hint, platforms: opts.platforms, avoid: opts.avoid });
 }
 
 /** El cierre fijo del cliente (para garantizarlo en cualquier post). */

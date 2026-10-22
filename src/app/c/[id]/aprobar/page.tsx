@@ -22,6 +22,7 @@ type Item = {
   status: string;
   caption: string;
   hooks: { text: string; angle: string }[];
+  captions: { kind: string; text: string }[] | null;
   media_path: string | null;
   overlay_text: string | null;
   approved_at: string | null;
@@ -41,7 +42,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
     db.from("content_folders").select("*").eq("client_id", id).order("created_at"),
     db
       .from("queue_items")
-      .select("id, file_name, kind, status, caption, hooks, media_path, overlay_text, approved_at, approved_by, error, created_at, scheduled_posts!queue_items_scheduled_post_id_fkey(status, scheduled_for, results)")
+      .select("id, file_name, kind, status, caption, hooks, captions, media_path, overlay_text, approved_at, approved_by, error, created_at, scheduled_posts!queue_items_scheduled_post_id_fkey(status, scheduled_for, results)")
       .eq("client_id", id)
       .order("created_at", { ascending: true })
       .limit(200),
@@ -115,7 +116,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
       <section className="mb-10 space-y-4">
         <h2 className="text-lg font-semibold">Por aprobar {pendingViews.length ? <span className="chip ml-1">{pendingViews.length}</span> : null}</h2>
         {pendingViews.length ? (
-          pendingViews.map((i) => <QueueCard key={i.id} clientId={id} item={{ id: i.id, file_name: i.file_name, kind: i.kind, caption: i.caption, hooks: i.hooks ?? [], url: i.url } satisfies QueueItemView} />)
+          pendingViews.map((i) => <QueueCard key={i.id} clientId={id} item={{ id: i.id, file_name: i.file_name, kind: i.kind, caption: i.caption, hooks: i.hooks ?? [], captions: i.captions ?? [], url: i.url } satisfies QueueItemView} />)
         ) : (
           <p className="text-sm text-muted">No hay videos esperando. Cuando el editor suba nuevos, aparecen aquí{isAgency ? "" : " y te llega un correo"}.</p>
         )}

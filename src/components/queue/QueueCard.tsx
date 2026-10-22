@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Spinner } from "../ApiButton";
 import { DEFAULT_OVERLAY, ViralText } from "../publish/ViralText";
+import { CaptionPicker, type CaptionOpt } from "../publish/CaptionPicker";
 import { burnText, burnTextImage, type OverlayOpts } from "@/lib/overlay-text";
 import { grabFrames } from "@/lib/video-frames";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -14,6 +15,7 @@ export type QueueItemView = {
   kind: "video" | "image";
   caption: string;
   hooks: { text: string; angle: string }[];
+  captions: CaptionOpt[];
   url: string | null;
 };
 
@@ -21,11 +23,25 @@ export type QueueItemView = {
 export function QueueCard({ clientId, item }: { clientId: string; item: QueueItemView }) {
   const router = useRouter();
   const [caption, setCaption] = useState(item.caption);
+  const [options, setOptions] = useState<CaptionOpt[]>(item.captions ?? []);
   const [overlay, setOverlay] = useState<OverlayOpts>(DEFAULT_OVERLAY);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
+
+  /** Otros 3 copys, distintos a los que ya salieron. */
+  async function moreCaptions() {
+    const frames = item.url ? await grabFrames(item.url, item.kind).catch(() => []) : [];
+    const res = await fetch(`/api/clients/${clientId}/social/caption`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frames, itemId: item.id, avoid: options.map((o) => o.text), hint: overlay.text.trim() ? `On-screen text of the video: ${overlay.text}` : "" }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error ?? "No se pudieron escribir los copys");
+    setOptions(j.result.options);
+  }
 
   async function suggest() {
     const frames = item.url ? await grabFrames(item.url, item.kind).catch(() => []) : [];
@@ -80,8 +96,12 @@ export function QueueCard({ clientId, item }: { clientId: string; item: QueueIte
       </div>
       <div className="min-w-0 space-y-3">
         <div className="truncate text-xs text-muted" title={item.file_name}>{item.file_name}</div>
+        <div className="space-y-1">
+          <span className="label">Escoge un copy</span>
+          <CaptionPicker options={options} selected={caption} onPick={(t) => { setCaption(t); setSaved(false); }} onMore={moreCaptions} />
+        </div>
         <label className="block space-y-1">
-          <span className="label">Copy</span>
+          <span className="label">Copy final (edítalo si quieres)</span>
           <textarea rows={6} className="input text-sm" value={caption} onChange={(e) => { setCaption(e.target.value); setSaved(false); }} />
         </label>
         {caption !== item.caption ? (

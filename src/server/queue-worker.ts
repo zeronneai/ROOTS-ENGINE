@@ -10,7 +10,7 @@ import { listDropboxFolder, mimeFor } from "../lib/dropbox";
 import { withFooter } from "../lib/ai/caption";
 import { runWithClient } from "../lib/usage";
 import { analyzeMedia, shrinkVideo } from "./auto-caption";
-import { clientFooter, generateCaption, generateHooks } from "./captions";
+import { clientFooter, generateCaptions, generateHooks } from "./captions";
 import { notifyNewForApproval } from "./queue-notify";
 
 const MAX_PER_RUN = 6; // si hay más, sigue en la siguiente vuelta
@@ -91,9 +91,14 @@ async function scanFolder(db: SupabaseClient, folder: Folder, log: (m: string) =
       if (upErr) throw new Error(`No se pudo guardar el video: ${upErr.message}`);
 
       const { frames, transcript } = await analyzeMedia(db, folder.client_id, { buffer: media.buffer, name: media.name, kind: f.kind });
-      const caption = f.caption ? withFooter(f.caption, footer) : (await generateCaption(db, folder.client_id, { frames, transcript })).caption;
+      // 3 opciones de copy; si el editor dejó un .txt, ese va primero y es el que queda escogido
+      const options = (await generateCaptions(db, folder.client_id, { frames, transcript })).options;
+      if (f.caption) options.unshift({ kind: "editor", text: withFooter(f.caption, footer) });
       const hooks = f.kind === "video" ? (await generateHooks(db, folder.client_id, { frames, transcript })).hooks : [];
-      await db.from("queue_items").update({ media_path: mediaPath, caption: caption.slice(0, 2200), hooks, status: "pending", error: null }).eq("id", item.id);
+      await db
+        .from("queue_items")
+        .update({ media_path: mediaPath, caption: options[0].text.slice(0, 2200), captions: options, transcript, hooks, status: "pending", error: null })
+        .eq("id", item.id);
       added++;
     } catch (e) {
       failed++;

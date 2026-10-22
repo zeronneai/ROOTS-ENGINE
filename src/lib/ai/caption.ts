@@ -6,9 +6,20 @@ import { z } from "zod";
 import { AGENCY_CONTEXT, json, structured } from "./claude";
 import type { BrandBrain } from "../types";
 
+export const CAPTION_KINDS = {
+  largo: "Largo",
+  corto: "Corto",
+  directo: "Sin pedir comentarios",
+} as const;
+export type CaptionKind = keyof typeof CAPTION_KINDS;
+export type CaptionOption = { kind: CaptionKind | "editor"; text: string };
+export const CAPTION_LABELS: Record<string, string> = { ...CAPTION_KINDS, editor: "Del editor (.txt)" };
+
 const CaptionSchema = z.object({
-  caption: z.string().describe("El copy completo listo para pegar, con emojis si la marca los usa y los hashtags al final"),
-  language: z.enum(["es", "en"]).describe("Idioma en el que quedó el copy"),
+  largo: z.string().describe("Copy largo: hook + 4 a 8 líneas que cuentan o explican, con emojis si la marca los usa, CTA (puede pedir que comenten una palabra) y hashtags"),
+  corto: z.string().describe("Copy corto: hook + 1 o 2 líneas + CTA y hashtags. Se lee en 3 segundos"),
+  directo: z.string().describe("Copy sin pedir comentarios: NUNCA dice comenta, escribe abajo, deja tu emoji ni nada parecido; el CTA es llamar, escribir por DM o WhatsApp, agendar o visitar. Largo medio"),
+  language: z.enum(["es", "en"]).describe("Idioma en el que quedaron los copys"),
   whatISaw: z.string().describe("Una frase: de qué trata el video según lo que viste y escuchaste"),
 });
 
@@ -26,22 +37,25 @@ export type CaptionInput = {
   platforms?: string[];
 };
 
-export async function writeCaption(input: CaptionInput) {
+/** 3 copys distintos para el mismo video: largo, corto y uno que no pide comentarios. */
+export async function writeCaptions(input: CaptionInput & { avoid?: string[] }) {
   const b = input.brand;
   const out = await structured({
     schema: CaptionSchema,
     label: "Copy con IA",
-    maxTokens: 2000,
+    maxTokens: 3000,
     images: input.frames.slice(0, 8),
     system: `${AGENCY_CONTEXT}
-You are the social media copywriter for this client. Write the caption for the video shown in the frames (in order, from start to end) and described by its transcript.
-- Sound exactly like the client's PAST CAPTIONS: same length, language mix, emojis, line breaks, hashtags and closing. They are the strongest reference.
+You are the social media copywriter for this client. Write 3 caption options for the video shown in the frames (in order, from start to end) and described by its transcript.
+- Sound like the client's PAST CAPTIONS: language mix, emojis, line breaks, hashtags and closing. They are the strongest reference for voice.
 - Follow the CLIENT RULES literally. They come from the agency and always win.
-- First line is a hook that makes people stop and read, tied to what actually happens in the video. Do not describe the video literally ("in this video...").
+- Each option opens with a different hook that makes people stop and read, tied to what actually happens in the video. Do not describe the video literally ("in this video...").
+- largo: tells or explains more (4 to 8 short lines). It may ask people to comment a word.
+- corto: 1 or 2 short lines after the hook.
+- directo: must NEVER ask people to comment, reply, drop an emoji, tag someone or "write below". Its call to action is to call, DM, WhatsApp, book or visit.
 - Write in the language spoken in the video. If nobody talks, use the language the client posts in most.
 - Never invent prices, discounts, promos, dates, addresses or phone numbers that are not in the brand, rules or video.
-- Keep it short for reels: usually 2 to 5 short lines plus the closing and hashtags.
-- If the client has a fixed closing line, end with it (adapted to the caption's language if the rules say so).
+- If the client has a fixed closing line, end every option with it (adapted to the caption's language if the rules say so).
 - No em dashes or long dashes.`,
     user: `CLIENT: ${json(input.client)}
 BRAND: ${json({ name: b.businessName, oneLiner: b.oneLiner, languageNotes: b.languageNotes, offer: b.offer, voice: b.voice, cta: b.cta, avoid: b.avoid })}
@@ -51,9 +65,17 @@ FIXED CLOSING LINE: ${input.footer?.trim() || "none"}
 PLATFORMS: ${input.platforms?.join(", ") || "instagram, tiktok, facebook"}
 PAST CAPTIONS: ${json(input.examples.slice(0, 10))}
 TRANSCRIPT OF THE VIDEO: ${input.transcript?.trim() ? json(input.transcript.slice(0, 4000)) : "(no speech or not available)"}
+${input.avoid?.length ? `ALREADY PROPOSED (write 3 NEW ones with different hooks and angles): ${json(input.avoid.slice(0, 6))}` : ""}
 ${input.hint?.trim() ? `NOTES FROM THE TEAM ABOUT THIS POST: ${json(input.hint)}` : ""}`,
   });
-  return { ...out, caption: withFooter(out.caption, input.footer) };
+  const options: CaptionOption[] = (Object.keys(CAPTION_KINDS) as CaptionKind[]).map((kind) => ({ kind, text: withFooter(out[kind], input.footer) }));
+  return { options, whatISaw: out.whatISaw, language: out.language };
+}
+
+/** Un solo copy (para lo automático): el largo. */
+export async function writeCaption(input: CaptionInput) {
+  const out = await writeCaptions(input);
+  return { caption: out.options[0].text, options: out.options, whatISaw: out.whatISaw };
 }
 
 /** Garantiza el cierre fijo: si el copy ya trae el teléfono (o el texto), no lo repite. */
