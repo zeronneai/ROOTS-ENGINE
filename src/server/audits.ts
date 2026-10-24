@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { median, scrapeGoogleLocalMarket, scrapeGooglePlace, scrapeInstagramProfiles, scrapeTiktokProfile, type GooglePlace, type SocialProfile } from "@/lib/scrape/apify";
-import { writeAudit, type AuditReport } from "@/lib/ai/audit";
+import { writeClosing, writeDiagnosis, type AuditDraft, type AuditInput, type AuditReport } from "@/lib/ai/audit";
 import { checkSite, handleOf, type SiteCheck } from "./audit/site-check";
 import type { AuditStepId } from "@/lib/audit-steps";
 
@@ -48,6 +48,8 @@ export type Research = {
       text: string | null;
     })[];
   };
+  /** el diagnóstico escrito, esperando el cierre */
+  draft?: AuditDraft;
   social?: {
     own: (ProfileStats | { platform: string; handle: string; notFound: true })[];
     facebook: string | null;
@@ -235,23 +237,12 @@ export async function runAuditStep(db: SupabaseClient, id: string, step: AuditSt
       const found = research.social?.own.filter((p) => !("notFound" in p)).length ?? 0;
       note = `${found} red${found === 1 ? "" : "es"} propia${found === 1 ? "" : "s"}, ${research.social?.competitors.length ?? 0} de la competencia`;
     } else if (step === "write") {
-      const report = await writeAudit(
-        {
-          business: {
-            name: a.business_name,
-            intro: a.intro,
-            category: research.google?.category ?? a.category,
-            city: a.city,
-            website: a.website ?? research.google?.place?.website ?? null,
-            instagram: a.instagram,
-            tiktok: a.tiktok,
-            facebook: a.facebook ?? research.social?.facebook ?? null,
-          },
-          teamNotes: a.team_notes,
-          research: compactForWriting(research),
-        },
-        a.language,
-      );
+      research.draft = await writeDiagnosis(writingInput(a, research), a.language);
+      note = `Diagnóstico listo: ${research.draft.score}/100`;
+    } else if (step === "finish") {
+      if (!research.draft) throw new Error("Primero corre el paso de escribir el diagnóstico");
+      const report = await writeClosing(writingInput(a, research), a.language, research.draft);
+      delete research.draft;
       await save(db, id, { research, report, report_at: new Date().toISOString(), status: "done", step });
       return { note: `Calificación: ${report.score}/100` };
     }
@@ -261,6 +252,23 @@ export async function runAuditStep(db: SupabaseClient, id: string, step: AuditSt
     await save(db, id, { status: "error", error: (e as Error).message ?? String(e) }).catch(() => undefined);
     throw e;
   }
+}
+
+function writingInput(a: AuditRow, research: Research): AuditInput {
+  return {
+    business: {
+      name: a.business_name,
+      intro: a.intro,
+      category: research.google?.category ?? a.category,
+      city: a.city,
+      website: a.website ?? research.google?.place?.website ?? null,
+      instagram: a.instagram,
+      tiktok: a.tiktok,
+      facebook: a.facebook ?? research.social?.facebook ?? null,
+    },
+    teamNotes: a.team_notes,
+    research: compactForWriting(research),
+  };
 }
 
 /** Lo que Claude necesita leer, sin lo que solo infla el texto. */

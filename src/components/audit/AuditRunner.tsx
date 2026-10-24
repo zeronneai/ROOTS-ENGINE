@@ -63,7 +63,7 @@ export function AuditRunner({ auditId, hasReport, autoStart = false, hasResearch
             <button className="btn btn-ghost" onClick={() => run(failed.id)}>Reintentar desde aquí</button>
           ) : null}
           {hasResearch && !running ? (
-            <button className="btn btn-ghost" onClick={() => run("write", true)} title="Usa lo que ya se investigó">Solo reescribir</button>
+            <button className="btn btn-ghost" onClick={() => run("write")} title="Usa lo que ya se investigó">Solo reescribir</button>
           ) : null}
           <button className="btn btn-primary" disabled={running} onClick={() => run()}>
             {running ? <Spinner /> : "✦"} {running ? "Trabajando..." : hasReport ? "Volver a correr" : "Correr auditoría"}

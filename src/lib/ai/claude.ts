@@ -12,8 +12,22 @@ export function claude() {
 
 export const MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5-5";
 
-/** Llamada con salida estructurada validada por zod. */
-export async function structured<S extends z.ZodType>(opts: {
+/**
+ * Llamada con salida estructurada validada por zod.
+ * Si la respuesta llega cortada o mal formada (pasa de vez en cuando con salidas largas), se reintenta una vez.
+ */
+export async function structured<S extends z.ZodType>(opts: Parameters<typeof structuredOnce<S>>[0]): Promise<z.infer<S>> {
+  try {
+    return await structuredOnce(opts);
+  } catch (e) {
+    const msg = (e as Error).message ?? "";
+    if (!/parse structured output|no regresó salida válida|JSON/i.test(msg)) throw e;
+    console.error(`Claude: salida inválida, reintentando (${opts.label ?? "sin etiqueta"}): ${msg.slice(0, 160)}`);
+    return structuredOnce({ ...opts, maxTokens: Math.max(opts.maxTokens ?? 8000, 12000) });
+  }
+}
+
+async function structuredOnce<S extends z.ZodType>(opts: {
   schema: S;
   system: string;
   user: string;

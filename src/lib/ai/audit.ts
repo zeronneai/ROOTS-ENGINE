@@ -142,25 +142,27 @@ NOTES FROM THE PRA TEAM (what they told us, what we saw when we contacted them):
 RESEARCH WE GATHERED (Google profile and reviews, local market on Google Maps, competitor reviews, their website check, their social profiles and recent posts, competitors' social profiles): ${json(i.research)}
 ${extra}`;
 
-export async function writeAudit(input: AuditInput, lang: "en" | "es"): Promise<AuditReport> {
+export type AuditDraft = z.infer<typeof Part1> & z.infer<typeof Part2>;
+
+/** Paso 1 de la escritura: el diagnóstico (calificación, áreas, redes, Google y competencia). */
+export async function writeDiagnosis(input: AuditInput, lang: "en" | "es"): Promise<AuditDraft> {
   const [p1, p2] = await Promise.all([
-    structured({ label: "Auditoría: diagnóstico", schema: Part1, maxTokens: 6000, system: SYSTEM(lang, "score, headline, summary, areas, leaveAlone, notChecked"), user: USER(input) }),
-    structured({ label: "Auditoría: redes, Google y competencia", schema: Part2, maxTokens: 6000, system: SYSTEM(lang, "social, google, competitors"), user: USER(input) }),
+    structured({ label: "Auditoría: diagnóstico", schema: Part1, maxTokens: 12000, system: SYSTEM(lang, "score, headline, summary, areas, leaveAlone, notChecked"), user: USER(input) }),
+    structured({ label: "Auditoría: redes, Google y competencia", schema: Part2, maxTokens: 12000, system: SYSTEM(lang, "social, google, competitors"), user: USER(input) }),
   ]);
+  const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
   const areas = AREA_KEYS.map((k) => p1.areas.find((a) => a.key === k)).filter((a): a is NonNullable<typeof a> => !!a);
+  return { ...p1, score: clamp(p1.score), areas: areas.map((a) => ({ ...a, score: clamp(a.score) })), ...p2 };
+}
+
+/** Paso 2: dónde se pierden clientes, los 3 movimientos, arreglos rápidos y el cierre, a partir del diagnóstico. */
+export async function writeClosing(input: AuditInput, lang: "en" | "es", draft: AuditDraft): Promise<AuditReport> {
   const p3 = await structured({
     label: "Auditoría: dónde se pierden clientes y primeros pasos",
     schema: Part3,
-    maxTokens: 5000,
+    maxTokens: 10000,
     system: SYSTEM(lang, "customersLost, firstMoves, quickWins, closingNote. Base them on the diagnosis below so the audit reads as one piece"),
-    user: USER(input, `\nDIAGNOSIS ALREADY WRITTEN: ${json({ ...p1, areas, social: p2.social, google: p2.google })}`),
+    user: USER(input, `\nDIAGNOSIS ALREADY WRITTEN: ${json({ score: draft.score, headline: draft.headline, summary: draft.summary, areas: draft.areas, leaveAlone: draft.leaveAlone, social: draft.social, google: draft.google, competitors: draft.competitors })}`),
   });
-  const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
-  return {
-    ...p1,
-    score: clamp(p1.score),
-    areas: areas.map((a) => ({ ...a, score: clamp(a.score) })),
-    ...p2,
-    ...p3,
-  };
+  return { ...draft, ...p3 };
 }
