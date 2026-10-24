@@ -54,7 +54,34 @@ export default async function AuditPage({ params, searchParams }: { params: Prom
 
         {hasResearch ? (
           <section className="mt-6 grid gap-3 sm:grid-cols-3">
-            <Fact title="Google" value={g ? `${g.rating ?? "?"} ★ · ${g.reviewsCount ?? 0} reseñas` : a.research?.google ? "No lo encontré" : "Sin revisar"} sub={g?.category ?? a.research?.google?.category ?? undefined} />
+            <div className="card p-4">
+              <div className="label">Google</div>
+              {g ? (
+                <>
+                  <a href={g.url ?? "#"} target="_blank" rel="noreferrer" className="mt-1 block font-semibold hover:underline">{g.title} ↗</a>
+                  <div className="text-sm">{g.rating != null ? `${g.rating} ★ · ` : "Sin calificación · "}{g.reviewsCount ?? 0} reseñas</div>
+                  <div className="mt-0.5 truncate text-xs text-muted">{[g.category, g.address].filter(Boolean).join(" · ")}</div>
+                  {a.research?.google?.match === "unsure" ? (
+                    <p className="mt-2 text-xs text-bad">No es seguro que sea el suyo. Si no es, pega su link de Google Maps en "Corregir los datos" y vuelve a correrla.</p>
+                  ) : null}
+                  {a.research?.google?.alternatives?.length ? (
+                    <details className="mt-2 text-xs">
+                      <summary className="cursor-pointer text-muted">Otros resultados con su nombre</summary>
+                      <ul className="mt-1 space-y-1">
+                        {a.research.google.alternatives.map((x) => (
+                          <li key={x.url ?? x.title}>
+                            <a href={x.url ?? "#"} target="_blank" rel="noreferrer" className="hover:underline">{x.title}</a>
+                            <span className="text-muted"> · {x.reviewsCount ?? 0} reseñas{x.address ? ` · ${x.address}` : ""}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </>
+              ) : (
+                <div className="mt-1 font-semibold">{a.research?.google ? "No lo encontré" : "Sin revisar"}</div>
+              )}
+            </div>
             <Fact
               title="Sitio web"
               value={a.research?.web?.own ? (a.research.web.own.ok ? `Carga en ${((a.research.web.own.responseMs ?? 0) / 1000).toFixed(1)} s` : a.research.web.own.error ?? "No cargó") : a.research?.web ? "No tiene" : "Sin revisar"}

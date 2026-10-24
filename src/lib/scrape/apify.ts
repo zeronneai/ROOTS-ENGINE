@@ -220,6 +220,22 @@ export async function scrapeGooglePlace(opts: { url?: string | null; query?: str
   return items[0] ? mapPlace(items[0]) : null;
 }
 
+/** Hasta `n` resultados de Google para un nombre + ciudad, para escoger el que sí es el negocio. */
+export async function searchGooglePlaces(query: string, location: string | null, n = 3, maxReviews = 40) {
+  const input: Record<string, unknown> = {
+    searchStringsArray: [query],
+    maxCrawledPlacesPerSearch: n,
+    maxReviews,
+    reviewsSort: "newest",
+    maxImages: 0,
+    language: "es",
+    scrapeReviewsPersonalData: false,
+  };
+  if (location) input.locationQuery = location;
+  const items = await runActor<GmItem>(GMAPS_ACTOR, input);
+  return items.map(mapPlace);
+}
+
 /** Los negocios del mismo giro en la ciudad, con calificación y reseñas (mercado local). */
 export async function scrapeGoogleLocalMarket(search: string, location: string, max = 15) {
   const items = await runActor<GmItem>(GMAPS_ACTOR, {

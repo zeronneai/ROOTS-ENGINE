@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { median, scrapeGoogleLocalMarket, scrapeGooglePlace, scrapeInstagramProfiles, scrapeTiktokProfile, type GooglePlace, type SocialProfile } from "@/lib/scrape/apify";
+import { median, scrapeGoogleLocalMarket, scrapeGooglePlace, scrapeInstagramProfiles, searchGooglePlaces, scrapeTiktokProfile, type GooglePlace, type SocialProfile } from "@/lib/scrape/apify";
 import { writeClosing, writeDiagnosis, type AuditDraft, type AuditInput, type AuditReport } from "@/lib/ai/audit";
 import { checkSite, handleOf, type SiteCheck } from "./audit/site-check";
 import type { AuditStepId } from "@/lib/audit-steps";
@@ -37,6 +37,10 @@ type Market = Omit<GooglePlace, "reviews">;
 export type Research = {
   google?: {
     place: GooglePlace | null;
+    /** qué tan seguros estamos de que ese perfil de Google es el del negocio */
+    match?: "link" | "sure" | "likely" | "unsure" | "none";
+    /** otros resultados que salieron con su nombre, por si el bueno era otro */
+    alternatives?: { title: string; address: string | null; category: string | null; rating: number | null; reviewsCount: number | null; url: string | null }[];
     category: string | null;
     localMarket: Market[];
     competitorReviews: { name: string; rating: number | null; reviewsCount: number | null; reviews: GooglePlace["reviews"] }[];
@@ -115,21 +119,55 @@ async function save(db: SupabaseClient, id: string, patch: Partial<AuditRow>) {
   if (error) throw error;
 }
 
+const words = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !["the", "el", "la", "los", "las", "de", "y", "and", "llc", "inc", "co"].includes(w));
+
+/** 0 a 1: cuánto se parece el nombre en Google al nombre del negocio. */
+function nameScore(a: string, b: string) {
+  const A = new Set(words(a));
+  const B = words(b);
+  if (!A.size || !B.length) return 0;
+  const hits = B.filter((w) => A.has(w) || [...A].some((x) => x.startsWith(w) || w.startsWith(x))).length;
+  return hits / Math.max(A.size, B.length);
+}
+
 async function stepGoogle(a: AuditRow): Promise<Research["google"]> {
   const location = a.city || "El Paso, TX";
-  const findPlace = () => scrapeGooglePlace({ url: a.google_maps_url, query: a.business_name, location }, 40).catch((e) => (console.error(e), null));
+  const ownHost = hostOf(a.website);
+  const findPlace = async (): Promise<Pick<NonNullable<Research["google"]>, "place" | "match" | "alternatives">> => {
+    if (a.google_maps_url) {
+      const place = await scrapeGooglePlace({ url: a.google_maps_url }, 40).catch((e) => (console.error(e), null));
+      return { place, match: place ? "link" : "none", alternatives: [] };
+    }
+    const found = await searchGooglePlaces(a.business_name, location, 3, 40).catch((e) => (console.error(e), [] as GooglePlace[]));
+    if (!found.length) return { place: null, match: "none", alternatives: [] };
+    const scored = found
+      .map((p) => ({ p, score: nameScore(a.business_name, p.title) + (ownHost && hostOf(p.website) === ownHost ? 1 : 0) }))
+      .sort((x, y) => y.score - x.score);
+    const best = scored[0];
+    const match = best.score >= 1 ? "sure" : best.score >= 0.6 ? "likely" : "unsure";
+    const alt = (p: GooglePlace) => ({ title: p.title, address: p.address, category: p.category, rating: p.rating, reviewsCount: p.reviewsCount, url: p.url });
+    return { place: best.p, match, alternatives: scored.slice(1).map((x) => alt(x.p)) };
+  };
   const findMarket = (cat: string) => scrapeGoogleLocalMarket(cat, location, 12).catch((e) => (console.error(e), [] as Market[]));
 
-  let place: GooglePlace | null;
+  let found: Awaited<ReturnType<typeof findPlace>>;
   let market: Market[];
-  if (a.category) [place, market] = await Promise.all([findPlace(), findMarket(a.category)]);
+  if (a.category) [found, market] = await Promise.all([findPlace(), findMarket(a.category)]);
   else {
-    place = await findPlace();
-    market = place?.category ? await findMarket(place.category) : [];
+    found = await findPlace();
+    market = found.place?.category ? await findMarket(found.place.category) : [];
   }
-  const ownHost = hostOf(place?.website ?? a.website);
-  const localMarket = market.filter((m) => m.title !== place?.title && (!ownHost || hostOf(m.website) !== ownHost));
-  return { place, category: a.category || place?.category || null, localMarket, competitorReviews: [] };
+  const place = found.place;
+  const host = hostOf(place?.website ?? a.website);
+  const localMarket = market.filter((m) => m.title !== place?.title && (!host || hostOf(m.website) !== host));
+  return { place, match: found.match, alternatives: found.alternatives, category: a.category || place?.category || null, localMarket, competitorReviews: [] };
 }
 
 /** Reseñas de los 3 competidores locales con más reseñas (paso aparte para no pasar el límite de tiempo). */
@@ -207,19 +245,20 @@ export async function runAuditStep(db: SupabaseClient, id: string, step: AuditSt
     const research: Research = { ...(a.research ?? {}) };
     let note: string | null = null;
     if (step === "google") {
-      if (a.business_name.startsWith("@")) {
-        // solo nos dieron su cuenta: el nombre real y su sitio salen de su perfil de Instagram
-        const [p] = await scrapeInstagramProfiles([a.business_name]).catch(() => [] as SocialProfile[]);
-        if (p?.name) {
-          a.business_name = p.name;
-          if (!a.website && p.link) a.website = p.link;
+      // de su Instagram sacamos su sitio (el link de la bio) y, si solo nos dieron el @, su nombre real
+      const ig = a.business_name.startsWith("@") ? a.business_name : handleOf(a.instagram, "instagram");
+      if (ig && (!a.website || a.business_name.startsWith("@"))) {
+        const [p] = await scrapeInstagramProfiles([ig]).catch(() => [] as SocialProfile[]);
+        if (p) {
+          if (a.business_name.startsWith("@") && p.name) a.business_name = p.name;
+          if (!a.website && p.link && !/linktr\.ee|linkin\.bio|beacons\.ai|instagram\.com|wa\.me/i.test(p.link)) a.website = p.link;
           if (!a.instagram) a.instagram = p.handle;
           await save(db, id, { business_name: a.business_name, website: a.website, instagram: a.instagram });
         }
       }
       research.google = await stepGoogle(a);
       note = research.google?.place
-        ? `${research.google.place.title}: ${research.google.place.rating ?? "sin"} ★ (${research.google.place.reviewsCount ?? 0} reseñas), ${research.google.localMarket.length} negocios en su zona`
+        ? `${research.google.place.title}${research.google.match === "unsure" ? " (no es seguro que sea el suyo)" : ""}: ${research.google.place.rating ?? "sin"} ★ (${research.google.place.reviewsCount ?? 0} reseñas), ${research.google.localMarket.length} negocios en su zona`
         : `No lo encontré en Google. ${research.google?.localMarket.length ?? 0} negocios en su zona`;
     } else if (step === "reviews") {
       if (!research.google) throw new Error("Primero corre el paso de Google");
@@ -277,6 +316,12 @@ function compactForWriting(r: Research) {
     google: r.google
       ? {
           ...r.google,
+          matchNote:
+            r.google.match === "unsure"
+              ? "WARNING: we searched Google by name and are NOT sure this profile is theirs (the name does not match well). Do not judge their Google presence as if it were confirmed; say we could not confirm their Google listing and recommend they claim/verify it."
+              : r.google.match === "none"
+                ? "We could not find them on Google by name."
+                : "Confirmed match.",
           localMarket: r.google.localMarket.slice(0, 10).map((m) => ({ title: m.title, category: m.category, rating: m.rating, reviewsCount: m.reviewsCount, website: m.website })),
         }
       : "not researched",
