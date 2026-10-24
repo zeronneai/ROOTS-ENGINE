@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAgency } from "@/server/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { loadAudit } from "@/server/audits";
+import { auditLinks, competitorLinks, loadAudit } from "@/server/audits";
 import { TIME_ZONE } from "@/lib/time";
 import { PageTitle, TopBar } from "@/components/Shell";
 import { AuditRunner } from "@/components/audit/AuditRunner";
@@ -70,7 +70,7 @@ export default async function AuditPage({ params, searchParams }: { params: Prom
 
         {a.report ? (
           <div className="mt-10">
-            <AuditReport r={a.report} business={a.business_name} city={a.city} date={date} lang={a.language} />
+            <AuditReport r={a.report} business={a.business_name} city={a.city} date={date} lang={a.language} links={auditLinks(a)} compLinks={competitorLinks(a.research)} />
           </div>
         ) : null}
 

@@ -278,3 +278,43 @@ function compactForWriting(r: Research) {
 }
 
 export type AuditListItem = Pick<AuditRow, "id" | "created_at" | "business_name" | "city" | "status" | "step" | "language" | "share_token"> & { score: number | null };
+
+// ───────────────────────────── Links del reporte ─────────────────────────────
+
+export type AuditLink = { kind: "website" | "google" | "instagram" | "tiktok" | "facebook"; label: string; url: string };
+export type CompetitorLinks = Record<string, { google?: string; website?: string; instagram?: string }>;
+
+const withHttp = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u.replace(/^\/+/, "")}`);
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Las redes y páginas del negocio que revisamos (las que nos dieron y las que encontró el motor), como links. */
+export function auditLinks(a: Pick<AuditRow, "website" | "google_maps_url" | "instagram" | "tiktok" | "facebook" | "research">): AuditLink[] {
+  const r = a.research ?? {};
+  const out: AuditLink[] = [];
+  const site = a.website || r.web?.own?.finalUrl || r.google?.place?.website || null;
+  if (site) out.push({ kind: "website", label: site.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, ""), url: withHttp(site) });
+  const g = a.google_maps_url || r.google?.place?.url || null;
+  if (g) out.push({ kind: "google", label: "Google", url: withHttp(g) });
+  const ownSocial = (p: string) => r.social?.own.find((x) => x.platform === p && !("notFound" in x))?.handle;
+  const ig = handleOf(a.instagram, "instagram") ?? ownSocial("instagram");
+  if (ig) out.push({ kind: "instagram", label: `@${ig}`, url: `https://www.instagram.com/${ig}/` });
+  const tt = handleOf(a.tiktok, "tiktok") ?? ownSocial("tiktok");
+  if (tt) out.push({ kind: "tiktok", label: `@${tt}`, url: `https://www.tiktok.com/@${tt}` });
+  const fb = a.facebook || r.social?.facebook || null;
+  if (fb) {
+    const h = handleOf(fb, "facebook");
+    out.push({ kind: "facebook", label: "Facebook", url: /facebook\.com|fb\.com/i.test(fb) ? withHttp(fb) : `https://www.facebook.com/${h}` });
+  }
+  return out;
+}
+
+/** Links de cada competidor (Google, sitio, Instagram), por nombre normalizado. */
+export function competitorLinks(r: Research | null | undefined): CompetitorLinks {
+  const out: CompetitorLinks = {};
+  for (const m of r?.google?.localMarket ?? []) out[norm(m.title)] = { google: m.url ?? undefined, website: m.website ? withHttp(m.website) : undefined };
+  for (const c of r?.social?.competitors ?? []) {
+    const k = norm(c.business);
+    out[k] = { ...(out[k] ?? {}), instagram: `https://www.instagram.com/${c.handle}/` };
+  }
+  return out;
+}

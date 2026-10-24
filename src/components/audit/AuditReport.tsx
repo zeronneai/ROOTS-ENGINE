@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import type { AuditReport as Report, AuditAreaKey } from "@/lib/ai/audit";
+import type { AuditLink, CompetitorLinks } from "@/server/audits";
 
 /**
  * La auditoría como la ve el prospecto (y nosotros en el portal). Sin hooks: sirve en
@@ -10,6 +11,8 @@ const T = {
   en: {
     kicker: "The Purple Roots Business Audit",
     prepared: "Prepared for",
+    reviewed: "What we reviewed",
+    kinds: { website: "Website", google: "Google", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" } as Record<AuditLink["kind"], string>,
     score: "Audit score",
     areas: { social: "Social media", website: "Website", google: "Google & reviews", offer: "Your offer", followUp: "Lead follow-up" } as Record<AuditAreaKey, string>,
     leave: "What is working. Leave it alone.",
@@ -51,6 +54,8 @@ const T = {
   es: {
     kicker: "Auditoría de Negocio Purple Roots",
     prepared: "Preparada para",
+    reviewed: "Lo que revisamos",
+    kinds: { website: "Sitio", google: "Google", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" } as Record<AuditLink["kind"], string>,
     score: "Calificación",
     areas: { social: "Redes sociales", website: "Sitio web", google: "Google y reseñas", offer: "Tu oferta", followUp: "Seguimiento a clientes" } as Record<AuditAreaKey, string>,
     leave: "Lo que funciona. No lo toques.",
@@ -92,11 +97,28 @@ const T = {
 };
 
 const WA = "19152343655";
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const tone = (s: number) => (s >= 75 ? "#15803d" : s >= 50 ? "#c2410c" : "#b91c1c");
 const fmt = (n: number | null | undefined) => (n == null ? null : n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}K` : n.toLocaleString("en-US"));
 
-export function AuditReport({ r, business, city, date, lang }: { r: Report; business: string; city: string; date: string; lang: "en" | "es" }) {
+export function AuditReport({
+  r,
+  business,
+  city,
+  date,
+  lang,
+  links = [],
+  compLinks = {},
+}: {
+  r: Report;
+  business: string;
+  city: string;
+  date: string;
+  lang: "en" | "es";
+  links?: AuditLink[];
+  compLinks?: CompetitorLinks;
+}) {
   const t = T[lang];
   const areas = r.areas;
   const area = (k: AuditAreaKey) => areas.find((a) => a.key === k);
@@ -116,6 +138,20 @@ export function AuditReport({ r, business, city, date, lang }: { r: Report; busi
             <p className="text-sm text-white/70">{t.prepared}</p>
             <h1 className="mt-1 text-4xl font-extrabold leading-[1.02] tracking-tight sm:text-6xl">{business}</h1>
             <p className="mt-2 text-white/70">{city}</p>
+            {links.length ? (
+              <div className="mt-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-white/60">{t.reviewed}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {links.map((l) => (
+                    <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-3 py-1.5 text-sm text-white ring-1 ring-white/25 hover:bg-white/20">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-[#fce762]">{t.kinds[l.kind]}</span>
+                      <span>{l.label}</span>
+                      <span aria-hidden className="text-white/60">↗</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <p className="mt-8 max-w-2xl text-xl font-semibold leading-snug text-[#fce762] sm:text-2xl">{r.headline}</p>
             <p className="mt-3 max-w-2xl text-white/85">{r.summary}</p>
           </div>
@@ -234,7 +270,17 @@ export function AuditReport({ r, business, city, date, lang }: { r: Report; busi
                 <div className="text-lg font-bold">{c.name}</div>
                 <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted">
                   {c.rating != null ? <span className="chip">★ {c.rating} · {fmt(c.reviews) ?? 0} {t.reviews}</span> : null}
-                  {c.instagram ? <span className="chip">@{c.instagram}{c.followers != null ? ` · ${fmt(c.followers)} ${t.followers}` : ""}</span> : null}
+                  {c.instagram ? (
+                    <a href={compLinks[norm(c.name)]?.instagram ?? `https://www.instagram.com/${c.instagram.replace(/^@/, "")}/`} target="_blank" rel="noreferrer" className="chip hover:underline">
+                      @{c.instagram.replace(/^@/, "")}{c.followers != null ? ` · ${fmt(c.followers)} ${t.followers}` : ""} ↗
+                    </a>
+                  ) : null}
+                  {compLinks[norm(c.name)]?.google ? (
+                    <a href={compLinks[norm(c.name)]!.google} target="_blank" rel="noreferrer" className="chip hover:underline">Google ↗</a>
+                  ) : null}
+                  {compLinks[norm(c.name)]?.website ? (
+                    <a href={compLinks[norm(c.name)]!.website} target="_blank" rel="noreferrer" className="chip hover:underline">{t.kinds.website} ↗</a>
+                  ) : null}
                 </div>
                 <p className="mt-3 text-sm"><span className="font-semibold text-bad">{t.better}: </span>{c.doingBetter}</p>
                 <p className="mt-1 text-sm"><span className="font-semibold text-ok">{t.win}: </span>{c.whereYouWin}</p>

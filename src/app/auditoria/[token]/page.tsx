@@ -6,16 +6,17 @@ import { AuditReport } from "@/components/audit/AuditReport";
 import { PrintButton } from "@/components/PrintButton";
 import { AutoPrint } from "@/components/AutoPrint";
 import type { AuditReport as Report } from "@/lib/ai/audit";
+import { auditLinks, competitorLinks, type AuditRow } from "@/server/audits";
 
 export const dynamic = "force-dynamic";
 
-type Row = { business_name: string; city: string; language: "en" | "es"; report: Report | null; report_at: string | null; created_at: string };
+type Row = Pick<AuditRow, "website" | "google_maps_url" | "instagram" | "tiktok" | "facebook" | "research"> & { business_name: string; city: string; language: "en" | "es"; report: Report | null; report_at: string | null; created_at: string };
 
 async function load(token: string) {
   if (!/^[a-f0-9]{24,64}$/.test(token)) return null;
   const { data } = await supabaseAdmin()
     .from("audits")
-    .select("business_name, city, language, report, report_at, created_at")
+    .select("business_name, city, language, report, report_at, created_at, website, google_maps_url, instagram, tiktok, facebook, research")
     .eq("share_token", token)
     .maybeSingle();
   return (data as Row | null) ?? null;
@@ -42,7 +43,7 @@ export default async function PublicAudit({ params, searchParams }: { params: Pr
         <PrintButton label={lang === "es" ? "Descargar PDF" : "Download PDF"} />
       </div>
       {pdf === "1" ? <AutoPrint /> : null}
-      <AuditReport r={a.report} business={a.business_name} city={a.city} date={date} lang={lang} />
+      <AuditReport r={a.report} business={a.business_name} city={a.city} date={date} lang={lang} links={auditLinks(a)} compLinks={competitorLinks(a.research)} />
     </main>
   );
 }
