@@ -66,7 +66,51 @@ export async function notifyAudit(db: SupabaseClient, id: string, failed?: strin
         ].filter(Boolean),
         { label: "Revisar en el portal", href: portal },
       );
-  const r = await sendEmail({ to: notifyTo(), subject: failed ? `⚠ Auditoría con error: ${a.business_name}` : `✦ Auditoría lista: ${a.business_name}`, ...mail });
+  const subject = failed ? `⚠ Auditoría con error: ${a.business_name}` : `✦ Auditoría lista: ${a.business_name}`;
+  // Primero por el Apps Script del sitio (manda con Gmail, sin Resend); si no hay llave, por Resend
+  let r = await notifyViaAppsScript({
+    subject,
+    business: a.business_name,
+    score: a.report?.score ?? null,
+    headline: failed ? `Falló: ${failed}` : (a.report?.headline ?? ""),
+    contact,
+    portal,
+    share: `${appUrl()}/auditoria/${a.share_token}`,
+    failed: !!failed,
+  });
+  if (!r.sent) {
+    console.error("auditoría: Apps Script no mandó el aviso", r.reason);
+    r = await sendEmail({ to: notifyTo(), subject, ...mail });
+  }
   if (r.sent) await db.from("audits").update({ notified_at: new Date().toISOString() }).eq("id", id);
   else console.error("auditoría: no se mandó el aviso", r.reason);
+}
+
+/** El Apps Script del formulario de purpleroots.agency, el mismo que ya manda los correos del sitio. */
+const APPS_SCRIPT_URL =
+  process.env.AUDIT_NOTIFY_WEBHOOK ||
+  "https://script.google.com/macros/s/AKfycby_FcqUjJIuyfwG6ZnxvOLqeETVAW6NBGGya7YUYJfKe0I3FifQwPO8vGfwm3Vlhiov5g/exec";
+
+async function notifyViaAppsScript(d: { subject: string; business: string; score: number | null; headline: string; contact: string; portal: string; share: string; failed: boolean }) {
+  const key = process.env.AUDIT_INTAKE_KEY;
+  if (!key) return { sent: false, reason: "Falta AUDIT_INTAKE_KEY" };
+  try {
+    const body = new URLSearchParams({
+      action: "audit_ready",
+      key,
+      subject: d.subject,
+      business: d.business,
+      score: d.score == null ? "" : String(d.score),
+      headline: d.headline,
+      contact: d.contact,
+      portal: d.portal,
+      share: d.share,
+      failed: d.failed ? "1" : "",
+    });
+    const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body, redirect: "follow", signal: AbortSignal.timeout(30000) });
+    const text = (await res.text()).trim();
+    return text.startsWith("ok") ? { sent: true, reason: null } : { sent: false, reason: `Apps Script: ${res.status} ${text.slice(0, 120)}` };
+  } catch (e) {
+    return { sent: false, reason: (e as Error).message };
+  }
 }
