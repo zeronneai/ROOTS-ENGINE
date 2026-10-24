@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { TIME_ZONE } from "@/lib/time";
 import { AuditReport } from "@/components/audit/AuditReport";
 import { PrintButton } from "@/components/PrintButton";
+import { AutoPrint } from "@/components/AutoPrint";
 import type { AuditReport as Report } from "@/lib/ai/audit";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +30,9 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
 }
 
 /** La auditoría que le mandamos al prospecto: pública con el link, sin iniciar sesión. */
-export default async function PublicAudit({ params }: { params: Promise<{ token: string }> }) {
+export default async function PublicAudit({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ pdf?: string }> }) {
   const a = await load((await params).token);
+  const { pdf } = await searchParams;
   if (!a?.report) notFound();
   const lang = a.language;
   const date = new Date(a.report_at ?? a.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { timeZone: TIME_ZONE, day: "numeric", month: "long", year: "numeric" });
@@ -39,6 +41,7 @@ export default async function PublicAudit({ params }: { params: Promise<{ token:
       <div className="mb-6 flex justify-end print:hidden">
         <PrintButton label={lang === "es" ? "Descargar PDF" : "Download PDF"} />
       </div>
+      {pdf === "1" ? <AutoPrint /> : null}
       <AuditReport r={a.report} business={a.business_name} city={a.city} date={date} lang={lang} />
     </main>
   );

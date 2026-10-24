@@ -30,9 +30,14 @@ export default async function AuditPage({ params, searchParams }: { params: Prom
       <main className="mx-auto max-w-5xl px-5 py-10">
         <PageTitle kicker="Auditoría gratis" title={a.business_name}>
           {a.report ? (
-            <a href={`/auditoria/${a.share_token}`} target="_blank" rel="noreferrer" className="btn btn-primary">
-              Abrir como la ve el cliente
-            </a>
+            <>
+              <a href={`/auditoria/${a.share_token}?pdf=1`} target="_blank" rel="noreferrer" className="btn btn-primary">
+                Descargar PDF
+              </a>
+              <a href={`/auditoria/${a.share_token}`} target="_blank" rel="noreferrer" className="btn btn-ghost">
+                Abrir como la ve el cliente
+              </a>
+            </>
           ) : null}
         </PageTitle>
 
