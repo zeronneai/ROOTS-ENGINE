@@ -160,6 +160,16 @@ body {
   background: linear-gradient(transparent 55%, var(--color-sun) 55%);
 }
 
+/* Auditoría: portada y cierre en morado profundo */
+.audit-cover {
+  background:
+    radial-gradient(600px 300px at 100% 0%, rgba(252, 231, 98, 0.22), transparent 60%),
+    radial-gradient(500px 300px at 0% 100%, rgba(255, 177, 122, 0.25), transparent 60%),
+    linear-gradient(135deg, #3b3569 0%, #4f4789 55%, #5d4f9e 100%);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
 /* Imprimir reporte (Descargar PDF) */
 @media print {
   header, aside, nav, .print\:hidden { display: none !important; }

@@ -18,6 +18,7 @@ export const PRICES = {
   apify: {
     "apify~instagram-reel-scraper": 0.0026,
     "apify~instagram-hashtag-scraper": 0.0026,
+    "apify~instagram-profile-scraper": 0.0026,
     "clockworks~tiktok-scraper": 0.0017,
     "compass~crawler-google-places": 0.002,
   } as Record<string, number>,

@@ -42,6 +42,7 @@ async function runActor<T>(actor: string, input: unknown): Promise<T[]> {
     "apify~instagram-hashtag-scraper": "Instagram: hashtags",
     "clockworks~tiktok-scraper": "TikTok",
     "compass~crawler-google-places": "Google Maps",
+    "apify~instagram-profile-scraper": "Instagram: perfiles",
   };
   void recordUsage({
     kind: "apify",
@@ -230,4 +231,112 @@ export async function scrapeGoogleLocalMarket(search: string, location: string, 
     language: "es",
   });
   return items.map(mapPlace).map(({ reviews, ...p }) => (void reviews, p));
+}
+
+// ───────────────────────────── Perfiles (auditorías) ─────────────────────────────
+
+const IG_PROFILE_ACTOR = process.env.APIFY_IG_PROFILE_ACTOR || "apify~instagram-profile-scraper";
+
+export type SocialProfile = {
+  platform: "instagram" | "tiktok";
+  handle: string;
+  name: string | null;
+  bio: string | null;
+  link: string | null;
+  followers: number | null;
+  following: number | null;
+  posts: number | null;
+  highlights: number | null;
+  isBusiness: boolean | null;
+  category: string | null;
+  verified: boolean | null;
+  hasProfilePic: boolean | null;
+  recent: {
+    type: string | null;
+    caption: string | null;
+    views: number | null;
+    likes: number | null;
+    comments: number | null;
+    postedAt: string | null;
+    url: string | null;
+  }[];
+};
+
+type IgProfileItem = Record<string, unknown> & {
+  username?: string; fullName?: string; biography?: string; externalUrl?: string; followersCount?: number; followsCount?: number;
+  postsCount?: number; highlightReelCount?: number; isBusinessAccount?: boolean; businessCategoryName?: string; verified?: boolean;
+  profilePicUrl?: string; profilePicUrlHD?: string;
+  latestPosts?: { type?: string; caption?: string; likesCount?: number; commentsCount?: number; videoViewCount?: number; videoPlayCount?: number; timestamp?: string; url?: string }[];
+};
+
+/** Perfil completo de Instagram: bio, link, seguidores, destacadas y sus últimas 12 publicaciones (de todo tipo). */
+export async function scrapeInstagramProfiles(handles: string[]): Promise<SocialProfile[]> {
+  const list = [...new Set(handles.map(clean).filter(Boolean))];
+  if (!list.length) return [];
+  const items = await runActor<IgProfileItem>(IG_PROFILE_ACTOR, { usernames: list });
+  return items
+    .filter((i) => i.username)
+    .map((i) => ({
+      platform: "instagram" as const,
+      handle: String(i.username).toLowerCase(),
+      name: i.fullName ?? null,
+      bio: i.biography ?? null,
+      link: i.externalUrl ?? null,
+      followers: num(i.followersCount),
+      following: num(i.followsCount),
+      posts: num(i.postsCount),
+      highlights: num(i.highlightReelCount),
+      isBusiness: typeof i.isBusinessAccount === "boolean" ? i.isBusinessAccount : null,
+      category: i.businessCategoryName ?? null,
+      verified: typeof i.verified === "boolean" ? i.verified : null,
+      hasProfilePic: i.profilePicUrl ? true : null,
+      recent: (i.latestPosts ?? []).slice(0, 12).map((p) => ({
+        type: p.type ?? null,
+        caption: p.caption ? String(p.caption).slice(0, 300) : null,
+        views: num(p.videoPlayCount) ?? num(p.videoViewCount),
+        likes: num(p.likesCount),
+        comments: num(p.commentsCount),
+        postedAt: p.timestamp ?? null,
+        url: p.url ?? null,
+      })),
+    }));
+}
+
+type TtProfileItem = TtItem & {
+  authorMeta?: TtItem["authorMeta"] & { signature?: string; following?: number; heart?: number; video?: number; verified?: boolean; bioLink?: { link?: string } | string | null; avatar?: string };
+};
+
+/** Perfil de TikTok con sus últimos videos (bio, seguidores, likes totales). */
+export async function scrapeTiktokProfile(handle: string, perAccount = 15): Promise<SocialProfile | null> {
+  const h = clean(handle);
+  if (!h) return null;
+  const items = await runActor<TtProfileItem>(TT_ACTOR, { profiles: [h], resultsPerPage: perAccount, shouldDownloadVideos: false });
+  const first = items.find((i) => i.authorMeta);
+  if (!first) return null;
+  const a = first.authorMeta!;
+  const link = typeof a.bioLink === "string" ? a.bioLink : (a.bioLink?.link ?? null);
+  return {
+    platform: "tiktok",
+    handle: String(a.name ?? h).toLowerCase(),
+    name: a.nickName ?? null,
+    bio: a.signature ?? null,
+    link,
+    followers: num(a.fans),
+    following: num(a.following),
+    posts: num(a.video),
+    highlights: null,
+    isBusiness: null,
+    category: null,
+    verified: typeof a.verified === "boolean" ? a.verified : null,
+    hasProfilePic: a.avatar ? true : null,
+    recent: mapTt(items).map((p) => ({
+      type: "video",
+      caption: p.caption ? p.caption.slice(0, 300) : null,
+      views: p.views,
+      likes: p.likes,
+      comments: p.comments,
+      postedAt: p.postedAt,
+      url: p.url,
+    })),
+  };
 }
