@@ -7,7 +7,7 @@ import type { AuditLink, CompetitorLinks } from "@/server/audits";
  * la página pública y en la de la agencia, y se imprime limpia a PDF.
  */
 
-const T = {
+export const AUDIT_T = {
   en: {
     kicker: "The Purple Roots Business Audit",
     prepared: "Prepared for",
@@ -119,7 +119,7 @@ export function AuditReport({
   links?: AuditLink[];
   compLinks?: CompetitorLinks;
 }) {
-  const t = T[lang];
+  const t = AUDIT_T[lang];
   const areas = r.areas;
   const area = (k: AuditAreaKey) => areas.find((a) => a.key === k);
   return (
@@ -362,7 +362,7 @@ function Block({ title, n, sub, children }: { title: string; n: string; sub?: st
   );
 }
 
-type Dict = (typeof T)["en"];
+type Dict = (typeof AUDIT_T)["en"];
 
 function SocialDetail({ r, t }: { r: Report; t: Dict }) {
   const s = r.social;

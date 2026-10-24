@@ -3,7 +3,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AUDIT_STEPS, type AuditStepId } from "@/lib/audit-steps";
 import { appUrl, sendEmail, simpleEmail } from "@/lib/email";
-import { loadAudit } from "./audits";
+import { auditLinks, competitorLinks, loadAudit } from "./audits";
+import { auditHtml } from "./audit-html";
+import { TIME_ZONE } from "@/lib/time";
 
 /**
  * Auditorías en automático, sin el worker ni una pestaña abierta: cada paso es una llamada
@@ -127,7 +129,24 @@ export async function notifyAudit(db: SupabaseClient, id: string, failed?: strin
       );
   const subject = failed ? `⚠ Auditoría con error: ${a.business_name}` : `✦ Auditoría lista: ${a.business_name}`;
   // Primero por el Apps Script del sitio (manda con Gmail, sin Resend); si no hay llave, por Resend
+  // la auditoría completa en HTML: el Apps Script la convierte a PDF y la adjunta
+  const html =
+    !failed && a.report
+      ? auditHtml({
+          r: a.report,
+          business: a.business_name,
+          city: a.city,
+          date: new Date(a.report_at ?? a.created_at).toLocaleDateString(a.language === "es" ? "es-MX" : "en-US", { timeZone: TIME_ZONE, day: "numeric", month: "long", year: "numeric" }),
+          lang: a.language,
+          links: auditLinks(a),
+          compLinks: competitorLinks(a.research),
+          shareUrl: `${appUrl()}/auditoria/${a.share_token}`,
+        })
+      : "";
+  const filename = `Auditoria ${a.business_name}`.replace(/[^\p{L}\p{N} ._-]/gu, "").trim().slice(0, 80);
   let r = await notifyViaAppsScript({
+    html,
+    filename,
     subject,
     business: a.business_name,
     score: a.report?.score ?? null,
@@ -150,7 +169,7 @@ const APPS_SCRIPT_URL =
   process.env.AUDIT_NOTIFY_WEBHOOK ||
   "https://script.google.com/macros/s/AKfycby_FcqUjJIuyfwG6ZnxvOLqeETVAW6NBGGya7YUYJfKe0I3FifQwPO8vGfwm3Vlhiov5g/exec";
 
-async function notifyViaAppsScript(d: { subject: string; business: string; score: number | null; headline: string; contact: string; portal: string; share: string; failed: boolean }) {
+async function notifyViaAppsScript(d: { html: string; filename: string; subject: string; business: string; score: number | null; headline: string; contact: string; portal: string; share: string; failed: boolean }) {
   const key = process.env.AUDIT_INTAKE_KEY;
   if (!key) return { sent: false, reason: "Falta AUDIT_INTAKE_KEY" };
   try {
@@ -165,10 +184,13 @@ async function notifyViaAppsScript(d: { subject: string; business: string; score
       portal: d.portal,
       share: d.share,
       failed: d.failed ? "1" : "",
+      html: d.html,
+      filename: d.filename,
     });
     const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body, redirect: "follow", signal: AbortSignal.timeout(30000) });
     const text = (await res.text()).trim();
-    return text.startsWith("ok") ? { sent: true, reason: null } : { sent: false, reason: `Apps Script: ${res.status} ${text.slice(0, 120)}` };
+    // "audit-ok" solo lo contesta la versión nueva del script (la vieja contesta "ok" sin mandar nada)
+    return text.startsWith("audit-ok") ? { sent: true, reason: null } : { sent: false, reason: `Apps Script: ${res.status} ${text.slice(0, 120)}` };
   } catch (e) {
     return { sent: false, reason: (e as Error).message };
   }
