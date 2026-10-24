@@ -62,7 +62,7 @@ export default async function AuditPage({ params, searchParams }: { params: Prom
                   <div className="text-sm">{g.rating != null ? `${g.rating} ★ · ` : "Sin calificación · "}{g.reviewsCount ?? 0} reseñas</div>
                   <div className="mt-0.5 truncate text-xs text-muted">{[g.category, g.address].filter(Boolean).join(" · ")}</div>
                   {a.research?.google?.match === "unsure" ? (
-                    <p className="mt-2 text-xs text-bad">No es seguro que sea el suyo. Si no es, pega su link de Google Maps en "Corregir los datos" y vuelve a correrla.</p>
+                    <p className="mt-2 text-xs text-bad">No es seguro que sea el suyo. Si no es, pega su link de Google Maps en “Corregir los datos” y vuelve a correrla.</p>
                   ) : null}
                   {a.research?.google?.alternatives?.length ? (
                     <details className="mt-2 text-xs">
