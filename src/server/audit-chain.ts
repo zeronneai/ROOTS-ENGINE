@@ -9,6 +9,8 @@ import { loadAudit } from "./audits";
  * Auditorías en automático, sin el worker ni una pestaña abierta: cada paso es una llamada
  * a /api/audits/<id>/auto que contesta de inmediato y trabaja después (after). Al terminar
  * un paso, se llama sola para el siguiente. Cada llamada cabe en el límite de Vercel.
+ * Red de seguridad: el Apps Script llama /api/audits/tick cada minuto y retoma las que se
+ * quedaron paradas (Vercel a veces corta la cadena) o fallaron (2 reintentos por paso).
  */
 
 /** Llave interna para que solo el propio motor pueda encadenar pasos (no hay que configurar nada). */
@@ -35,7 +37,64 @@ export async function triggerStep(origin: string, id: string, step: AuditStepId,
     body: JSON.stringify({ step, attempt }),
     signal: AbortSignal.timeout(20000),
   });
-  if (!res.ok) throw new Error(`No se pudo arrancar el paso ${step}: ${res.status}`);
+  if (!res.ok) throw new Error(`No se pudo arrancar el paso ${step}: ${res.status} ${(await res.text().catch(() => "")).slice(0, 120)}`);
+}
+
+const IDLE_MS = 2 * 60_000; // parada sin avanzar: el siguiente paso no arrancó
+const STALE_MS = 7 * 60_000; // "corriendo" por más de lo que aguanta Vercel: se murió
+const MAX_ATTEMPTS = 3;
+
+type Pending = { id: string; status: string; step: AuditStepId | null; attempts: number; updated_at: string; notified_at: string | null };
+
+/** Retoma las auditorías automáticas paradas o con error. Regresa qué hizo con cada una. */
+export async function tickAudits(db: SupabaseClient, run: (id: string, step: AuditStepId) => void) {
+  const { data } = await db
+    .from("audits")
+    .select("id, status, step, attempts, updated_at, notified_at")
+    .eq("source", "web")
+    .is("report", null)
+    .order("created_at")
+    .limit(10);
+  const now = Date.now();
+  const out: { id: string; action: string }[] = [];
+  for (const a of (data ?? []) as Pending[]) {
+    const age = now - new Date(a.updated_at).getTime();
+    let step: AuditStepId | null = null;
+    let retry = false;
+    if (a.status === "running") {
+      if (age < STALE_MS) continue;
+      step = a.step ?? AUDIT_STEPS[0].id;
+      retry = true;
+    } else if (a.status === "error") {
+      step = a.step ?? AUDIT_STEPS[0].id;
+      retry = true;
+    } else {
+      if (age < IDLE_MS) continue; // la cadena (o la entrada del sitio) está por arrancar el siguiente
+      step = a.step ? nextStep(a.step) : AUDIT_STEPS[0].id;
+    }
+    if (!step) continue;
+    const attempts = retry ? a.attempts + 1 : 0;
+    if (attempts >= MAX_ATTEMPTS) {
+      if (!a.notified_at) {
+        await notifyAudit(db, a.id, `el paso "${step}" falló ${MAX_ATTEMPTS} veces`);
+        out.push({ id: a.id, action: "avisada como fallida" });
+      }
+      continue;
+    }
+    // apartarla (si otro tick o la cadena la tomó primero, no se repite)
+    const { data: claimed } = await db
+      .from("audits")
+      .update({ status: "running", step, attempts })
+      .eq("id", a.id)
+      .eq("updated_at", a.updated_at)
+      .select("id")
+      .maybeSingle();
+    if (!claimed) continue;
+    run(a.id, step);
+    out.push({ id: a.id, action: `${retry ? "reintento" : "sigue"}: ${step}` });
+    if (out.length >= 3) break; // máximo 3 a la vez por minuto
+  }
+  return out;
 }
 
 export const notifyTo = () =>

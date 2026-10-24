@@ -76,6 +76,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const origin = new URL(req.url).origin;
-  after(() => triggerStep(origin, row.id, AUDIT_STEPS[0].id).catch((e) => console.error("auditoría: no arrancó", e)));
+  // si esto no arranca, el tick de cada minuto la toma
+  after(() => triggerStep(origin, row.id, AUDIT_STEPS[0].id).catch((e) => console.error("auditoría: no arrancó, la toma el tick", e)));
   return NextResponse.json({ ok: true, id: row.id });
 }

@@ -16,26 +16,21 @@ export async function POST(req: Request, ctx: Ctx) {
   const body = (await req.json().catch(() => ({}))) as { step?: string; attempt?: number };
   const step = body.step as AuditStepId;
   if (!AUDIT_STEPS.some((s) => s.id === step)) return NextResponse.json({ error: "Paso desconocido" }, { status: 400 });
-  const attempt = Number(body.attempt) || 1;
   const origin = new URL(req.url).origin;
 
   after(async () => {
     const db = supabaseAdmin();
     try {
       await runWithClient(null, () => runAuditStep(db, id, step));
+      await db.from("audits").update({ attempts: 0 }).eq("id", id);
     } catch (e) {
+      // queda con status "error": el tick de cada minuto la reintenta y avisa si se rinde
       console.error(`auditoría ${id} paso ${step}`, e);
-      // un reintento por paso (Apify a veces falla a la primera)
-      if (attempt < 2) return void (await triggerStep(origin, id, step, attempt + 1).catch((x) => console.error(x)));
-      return void (await notifyAudit(db, id, `paso "${step}": ${(e as Error).message}`.slice(0, 300)));
+      return;
     }
     const next = nextStep(step);
-    if (next) {
-      await triggerStep(origin, id, next).catch(async (e) => {
-        console.error(e);
-        await notifyAudit(db, id, `no arrancó el paso "${next}"`);
-      });
-    } else await notifyAudit(db, id);
+    if (next) await triggerStep(origin, id, next).catch((e) => console.error("auditoría: la cadena se cortó, la retoma el tick", e));
+    else await notifyAudit(db, id);
   });
   return NextResponse.json({ ok: true, step }, { status: 202 });
 }
