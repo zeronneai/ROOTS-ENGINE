@@ -119,6 +119,28 @@ async function save(db: SupabaseClient, id: string, patch: Partial<AuditRow>) {
   if (error) throw error;
 }
 
+const LINK_PAGES = /linktr\.ee|linkin\.bio|beacons\.ai|lnk\.bio|campsite\.bio|bio\.site|taplink|stan\.store|hoo\.be|komi\.io|carrd\.co|solo\.to/i;
+const NOT_A_SITE = /instagram\.com|tiktok\.com|facebook\.com|fb\.com|youtube\.com|youtu\.be|wa\.me|whatsapp|twitter\.com|x\.com|threads\.net|pinterest|spotify|apple\.com|google\.com|goo\.gl|maps\.app|linkedin|snapchat|cash\.app|venmo|paypal/i;
+
+/**
+ * El link de la bio de Instagram como sitio web. Si es un Linktree (o parecido), entra y busca
+ * el primer link que sí sea un sitio (no otra red social). Si no hay, regresa null.
+ */
+async function realSite(link: string): Promise<string | null> {
+  const url = /^https?:\/\//i.test(link) ? link : `https://${link}`;
+  if (NOT_A_SITE.test(url)) return null;
+  if (!LINK_PAGES.test(url)) return url;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000), headers: { "User-Agent": "Mozilla/5.0 (compatible; RootsEngineAudit/1.0)" } });
+    const html = await res.text();
+    const links = [...html.matchAll(/https?:\/\/[^"'\s<>\\]+/g)].map((m) => m[0].replace(/&amp;/g, "&"));
+    const site = links.find((l) => !LINK_PAGES.test(l) && !NOT_A_SITE.test(l) && !/\.(png|jpe?g|webp|svg|gif|css|js|woff2?)(\?|$)/i.test(l) && !/cdn|static|assets|schema\.org|w3\.org|cloudflare|googleapis|gstatic|sentry|linktr/i.test(l));
+    return site ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const words = (s: string) =>
   s
     .toLowerCase()
@@ -251,7 +273,7 @@ export async function runAuditStep(db: SupabaseClient, id: string, step: AuditSt
         const [p] = await scrapeInstagramProfiles([ig]).catch(() => [] as SocialProfile[]);
         if (p) {
           if (a.business_name.startsWith("@") && p.name) a.business_name = p.name;
-          if (!a.website && p.link && !/linktr\.ee|linkin\.bio|beacons\.ai|instagram\.com|wa\.me/i.test(p.link)) a.website = p.link;
+          if (!a.website && p.link) a.website = await realSite(p.link);
           if (!a.instagram) a.instagram = p.handle;
           await save(db, id, { business_name: a.business_name, website: a.website, instagram: a.instagram });
         }
@@ -325,7 +347,14 @@ function compactForWriting(r: Research) {
           localMarket: r.google.localMarket.slice(0, 10).map((m) => ({ title: m.title, category: m.category, rating: m.rating, reviewsCount: m.reviewsCount, website: m.website })),
         }
       : "not researched",
-    web: r.web ?? "not researched",
+    web: r.web
+      ? {
+          ...r.web,
+          own:
+            r.web.own ??
+            "NO WEBSITE FOUND: none was given to us, none is on their Google profile and none is in their Instagram bio. Do NOT state as a fact that they have no website; say we could not find one from where customers look (Google, Instagram bio) and that this itself loses customers.",
+        }
+      : "not researched",
     social: r.social ?? "not researched",
   };
 }

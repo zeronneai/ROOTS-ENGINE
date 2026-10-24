@@ -84,7 +84,7 @@ export default async function AuditPage({ params, searchParams }: { params: Prom
             </div>
             <Fact
               title="Sitio web"
-              value={a.research?.web?.own ? (a.research.web.own.ok ? `Carga en ${((a.research.web.own.responseMs ?? 0) / 1000).toFixed(1)} s` : a.research.web.own.error ?? "No cargó") : a.research?.web ? "No tiene" : "Sin revisar"}
+              value={a.research?.web?.own ? (a.research.web.own.ok ? `Carga en ${((a.research.web.own.responseMs ?? 0) / 1000).toFixed(1)} s` : a.research.web.own.error ?? "No cargó") : a.research?.web ? "No encontré (ni en Google ni en su bio)" : "Sin revisar"}
               sub={a.research?.web?.own?.finalUrl ?? undefined}
             />
             <Fact
