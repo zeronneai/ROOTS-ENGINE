@@ -205,6 +205,16 @@ export async function runAuditStep(db: SupabaseClient, id: string, step: AuditSt
     const research: Research = { ...(a.research ?? {}) };
     let note: string | null = null;
     if (step === "google") {
+      if (a.business_name.startsWith("@")) {
+        // solo nos dieron su cuenta: el nombre real y su sitio salen de su perfil de Instagram
+        const [p] = await scrapeInstagramProfiles([a.business_name]).catch(() => [] as SocialProfile[]);
+        if (p?.name) {
+          a.business_name = p.name;
+          if (!a.website && p.link) a.website = p.link;
+          if (!a.instagram) a.instagram = p.handle;
+          await save(db, id, { business_name: a.business_name, website: a.website, instagram: a.instagram });
+        }
+      }
       research.google = await stepGoogle(a);
       note = research.google?.place
         ? `${research.google.place.title}: ${research.google.place.rating ?? "sin"} ★ (${research.google.place.reviewsCount ?? 0} reseñas), ${research.google.localMarket.length} negocios en su zona`

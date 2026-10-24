@@ -19,10 +19,10 @@ export default async function AuditsPage() {
   await requireAgency();
   const { data } = await supabaseAdmin()
     .from("audits")
-    .select("id, created_at, business_name, city, status, language, report")
+    .select("id, created_at, business_name, city, status, step, source, language, report")
     .order("created_at", { ascending: false })
     .limit(100);
-  const audits = (data ?? []) as { id: string; created_at: string; business_name: string; city: string; status: string; language: string; report: { score?: number } | null }[];
+  const audits = (data ?? []) as { id: string; created_at: string; business_name: string; city: string; status: string; step: string | null; source: string | null; language: string; report: { score?: number } | null }[];
 
   return (
     <>
@@ -51,11 +51,15 @@ export default async function AuditsPage() {
                         <div className="truncate font-semibold">{a.business_name}</div>
                         <div className="text-xs text-muted">
                           {a.city} · {fmtDate(a.created_at, { day: "numeric", month: "short" })} · {a.language === "es" ? "Español" : "Inglés"}
+                          {a.source === "web" ? " · Llegó del sitio" : ""}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         {a.report?.score != null ? <span className="text-lg font-bold">{a.report.score}</span> : null}
-                        <span className={`chip ${STATUS[a.status]?.cls ?? ""}`}>{STATUS[a.status]?.label ?? a.status}</span>
+                        {(() => {
+                          const st = a.status === "new" && a.step && !a.report ? { label: "A medias", cls: "!bg-purple/15 !text-purple" } : STATUS[a.status];
+                          return <span className={`chip ${st?.cls ?? ""}`}>{st?.label ?? a.status}</span>;
+                        })()}
                       </div>
                     </Link>
                   </li>
