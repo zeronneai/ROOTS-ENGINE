@@ -21,6 +21,11 @@ function key() {
   return k;
 }
 
+/** GET a Zernio con caché (para métricas: no hace falta pedirlas en cada carga). */
+export async function zernioGet<T = Record<string, unknown>>(path: string, revalidateSeconds = 1800): Promise<T> {
+  return z<T>(path, { next: { revalidate: revalidateSeconds } } as RequestInit);
+}
+
 async function z<T = Record<string, unknown>>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,

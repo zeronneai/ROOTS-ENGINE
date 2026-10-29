@@ -39,6 +39,9 @@ export default async function AgencyHome() {
       />
       <main className="mx-auto max-w-7xl px-5 py-10">
         <PageTitle kicker="Agencia" title="Clientes">
+          <Link href="/metrics" className="btn btn-ghost">
+            ▲ Métricas
+          </Link>
           <Link href="/agency/auditorias" className="btn btn-ghost">
             ✦ Auditorías
           </Link>
