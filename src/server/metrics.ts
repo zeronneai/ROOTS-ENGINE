@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadEvents } from "./web";
+import { loadPublicSocial, type PublicSocial } from "./social-snapshots";
 import { summarize, type WebSummary } from "@/lib/web-stats";
 import {
   adAccounts,
@@ -116,16 +117,23 @@ export type ClientMetrics = Awaited<ReturnType<typeof loadClientMetrics>>;
 /** Todo lo medible de un cliente en un periodo: web (nuestro t.js), redes y anuncios (Zernio). */
 export async function loadClientMetrics(db: SupabaseClient, client: MetricsClient, days: number) {
   const r = rangeOf(days);
-  const [web, social, ads] = await Promise.all([
+  const [web, social, ads, publicSocial] = await Promise.all([
     webBlock(db, client.id, days).catch(() => null),
     socialBlock(client, r.from, r.to),
     adsBlock(client, r.from, r.to).catch((e) => ({ connections: [], summaries: [], errors: [(e as Error).message], choices: {} }) as AdsBlock),
+    loadPublicSocial(db, client.id, r.from).catch(() => null),
   ]);
   const adsTotals = (ads?.summaries ?? []).reduce(
     (a, s) => ({ spend: a.spend + s.totals.spend, results: a.results + s.totals.results, clicks: a.clicks + s.totals.clicks, impressions: a.impressions + s.totals.impressions }),
     { spend: 0, results: 0, clicks: 0, impressions: 0 },
   );
-  return { client, range: r, web, social, ads, adsTotals, highlights: highlights(web, social, ads) };
+  const publicFollowers = publicSocial?.accounts.length
+    ? {
+        current: publicSocial.accounts.reduce((a, x) => a + (x.latest.followers ?? 0), 0),
+        gained: publicSocial.accounts.some((x) => x.gained != null) ? publicSocial.accounts.reduce((a, x) => a + (x.gained ?? 0), 0) : null,
+      }
+    : null;
+  return { client, range: r, web, social, ads, adsTotals, publicSocial, publicFollowers, highlights: highlights(web, social, ads, publicSocial) };
 }
 
 export type Highlight = { tone: "good" | "bad" | "info"; text: string };
@@ -134,8 +142,18 @@ const pct = (cur: number, prev: number) => (prev ? Math.round(((cur - prev) / pr
 const money = (x: number) => `$${x.toLocaleString("en-US", { maximumFractionDigits: x < 100 ? 2 : 0 })}`;
 
 /** Lo que funciona y lo que no, en frases cortas, a partir de los números. */
-function highlights(web: WebBlock, social: SocialBlock, ads: AdsBlock | null): Highlight[] {
+function highlights(web: WebBlock, social: SocialBlock, ads: AdsBlock | null, pub: PublicSocial | null): Highlight[] {
   const out: Highlight[] = [];
+  for (const a of pub?.accounts ?? []) {
+    const name = a.platform === "instagram" ? "Instagram" : "TikTok";
+    const st = a.latest.stats;
+    if (a.gained != null && a.gained !== 0) out.push({ tone: a.gained > 0 ? "good" : "bad", text: `${name} @${a.handle}: ${a.gained > 0 ? "+" : ""}${a.gained} seguidores en el periodo.` });
+    if (st.daysSinceLastPost != null && st.daysSinceLastPost > 7) out.push({ tone: "bad", text: `${name} @${a.handle}: lleva ${st.daysSinceLastPost} días sin publicar.` });
+    else if (st.postsLast30Days) out.push({ tone: "info", text: `${name} @${a.handle}: ${st.postsLast30Days} publicaciones en los últimos 30 días${st.medianViews ? `, con ${st.medianViews.toLocaleString("en-US")} vistas medianas` : ""}.` });
+    const best = [...(a.latest.recent ?? [])].sort((x, y) => (y.views ?? y.likes ?? 0) - (x.views ?? x.likes ?? 0))[0];
+    if (best && st.medianViews && best.views && best.views >= st.medianViews * 2)
+      out.push({ tone: "good", text: `${name}: el post del ${best.postedAt?.slice(0, 10)} sacó ${best.views.toLocaleString("en-US")} vistas, ${Math.round(best.views / st.medianViews)}x lo normal. Repetir ese formato.` });
+  }
   if (web) {
     const c = web.current;
     const d = pct(c.visitors, web.previous.visitors);

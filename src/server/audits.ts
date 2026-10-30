@@ -61,7 +61,7 @@ export type Research = {
   };
 };
 
-type ProfileStats = SocialProfile & {
+export type ProfileStats = SocialProfile & {
   stats: {
     postsLast30Days: number;
     daysSinceLastPost: number | null;
@@ -72,7 +72,7 @@ type ProfileStats = SocialProfile & {
   };
 };
 
-function withStats(p: SocialProfile): ProfileStats {
+export function withStats(p: SocialProfile): ProfileStats {
   const now = Date.now();
   const dates = p.recent.map((r) => (r.postedAt ? new Date(r.postedAt).getTime() : 0)).filter(Boolean);
   const views = p.recent.map((r) => r.views).filter((v): v is number => v != null);

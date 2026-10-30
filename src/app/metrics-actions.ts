@@ -45,3 +45,15 @@ export async function chooseAdAccountAction(clientId: string, connectionId: stri
   await db.from("clients").update({ ad_accounts: map }).eq("id", clientId);
   revalidatePath(`/metrics/${clientId}`);
 }
+
+/** Tomar ahorita la foto de las redes públicas de un cliente (sin esperar al cron). */
+export async function refreshSocialAction(clientId: string) {
+  await requireAgency();
+  const db = supabaseAdmin();
+  const { data: c } = await db.from("clients").select("id, instagram, tiktok").eq("id", clientId).single();
+  if (c) {
+    const { snapshotClients } = await import("@/server/social-snapshots");
+    await snapshotClients(db, [c]);
+  }
+  revalidatePath(`/metrics/${clientId}`);
+}

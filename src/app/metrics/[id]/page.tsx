@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,7 +10,7 @@ import { ADS_PLATFORMS, type AdsPlatform } from "@/lib/metrics/zernio-metrics";
 import { PageTitle, TopBar } from "@/components/Shell";
 import { BarList, Kpi, TrendChart } from "@/components/metrics/Charts";
 import { fmtMoney, fmtNum, fmtPct, parseDays, RANGES } from "@/components/metrics/fmt";
-import { chooseAdAccountAction, connectAdsAction, setMetricsEnabledAction } from "@/app/metrics-actions";
+import { chooseAdAccountAction, connectAdsAction, refreshSocialAction, setMetricsEnabledAction } from "@/app/metrics-actions";
 import { SubmitButton } from "@/components/SubmitButton";
 
 const PLATFORM: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook", youtube: "YouTube", threads: "Threads", googlebusiness: "Google" };
@@ -68,8 +69,11 @@ export default async function ClientMetricsPage({ params, searchParams }: { para
           <Kpi label="Inversión en anuncios" value={ads?.summaries.length ? fmtMoney(m.adsTotals.spend) : "–"} sub={m.adsTotals.results ? `${fmtNum(m.adsTotals.results)} resultados · ${fmtMoney(m.adsTotals.spend / m.adsTotals.results)} c/u` : undefined} />
           <Kpi
             label="Seguidores"
-            value={s?.followers?.current != null ? fmtNum(s.followers.current) : "–"}
-            sub={s?.followers?.gained != null ? `${s.followers.gained > 0 ? "+" : ""}${fmtNum(s.followers.gained)} en el periodo` : undefined}
+            value={s?.followers?.current ? fmtNum(s.followers.current) : m.publicFollowers ? fmtNum(m.publicFollowers.current) : "–"}
+            sub={(() => {
+              const g = s?.followers?.gained || m.publicFollowers?.gained;
+              return g ? `${g > 0 ? "+" : ""}${fmtNum(g)} en el periodo` : "Instagram y TikTok";
+            })()}
           />
         </section>
 
@@ -131,8 +135,83 @@ export default async function ClientMetricsPage({ params, searchParams }: { para
           )}
         </Section>
 
+        {/* Redes públicas (Apify, sin conectar nada) */}
+        <Section
+          title="Redes (lo público de sus cuentas)"
+          right={
+            <form action={refreshSocialAction.bind(null, id)} className="flex items-center gap-3">
+              <span className="text-xs text-muted">{m.publicSocial?.accounts[0] ? `Última foto: ${m.publicSocial.accounts[0].latest.day}` : "Se toma una foto al día"}</span>
+              <SubmitButton className="btn btn-ghost !py-1 text-xs">Actualizar ahora</SubmitButton>
+            </form>
+          }
+        >
+          {!m.publicSocial?.accounts.length ? (
+            <p className="text-sm text-muted">
+              Todavía no hay datos. Revisa que el cliente tenga su Instagram o TikTok en Ajustes y dale Actualizar ahora (tarda 1 o 2 minutos).
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {m.publicSocial.accounts.map((a) => {
+                const st = a.latest.stats;
+                const url = a.platform === "instagram" ? `https://www.instagram.com/${a.handle}/` : `https://www.tiktok.com/@${a.handle}`;
+                return (
+                  <div key={a.platform} className="rounded-2xl border border-line p-5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <a href={url} target="_blank" rel="noreferrer" className="font-semibold hover:underline">
+                        {a.platform === "instagram" ? "Instagram" : "TikTok"} · @{a.handle} ↗
+                      </a>
+                      {a.latest.profile?.bio ? <span className="max-w-xl truncate text-xs text-muted">{a.latest.profile.bio}</span> : null}
+                    </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      <Small label="Seguidores" value={fmtNum(a.latest.followers)} />
+                      <Small label="Ganados en el periodo" value={a.gained != null ? `${a.gained > 0 ? "+" : ""}${fmtNum(a.gained)}` : "Juntando"} />
+                      <Small label="Posts en 30 días" value={fmtNum(st.postsLast30Days)} />
+                      <Small label="Último post" value={st.daysSinceLastPost != null ? (st.daysSinceLastPost === 0 ? "Hoy" : `Hace ${st.daysSinceLastPost} d`) : "–"} />
+                      <Small label="Vistas medianas" value={fmtNum(st.medianViews)} />
+                      <Small label="Engagement" value={fmtPct(st.engagementPct, 2)} />
+                    </div>
+                    {a.series.length > 1 ? (
+                      <div className="mt-5">
+                        <TrendChart days={a.series.map((x) => x.day)} series={[{ name: "Seguidores", color: "#4f4789", values: a.series.map((x) => x.followers ?? 0) }]} height={160} />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-muted">La gráfica de seguidores se va llenando con la foto de cada día.</p>
+                    )}
+                    {a.latest.recent?.length ? (
+                      <div className="mt-5 overflow-x-auto">
+                        <h4 className="label mb-2">Últimas publicaciones</h4>
+                        <table className="w-full text-sm">
+                          <thead className="text-left text-xs text-muted">
+                            <tr><th className="py-1 pr-3">Fecha</th><th className="py-1 pr-3">Texto</th><th className="py-1 pr-3 text-right">Vistas</th><th className="py-1 pr-3 text-right">Likes</th><th className="py-1 text-right">Coment.</th></tr>
+                          </thead>
+                          <tbody>
+                            {[...a.latest.recent].sort((x, y) => (y.postedAt ?? "").localeCompare(x.postedAt ?? "")).map((p, i) => {
+                              const hot = st.medianViews && p.views && p.views >= st.medianViews * 2;
+                              return (
+                                <tr key={`${p.url}-${i}`} className="border-t border-line">
+                                  <td className="whitespace-nowrap py-1.5 pr-3">{p.postedAt?.slice(0, 10)}</td>
+                                  <td className="max-w-md truncate py-1.5 pr-3" title={p.caption ?? ""}>
+                                    {p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="hover:underline">{p.caption?.slice(0, 80) || "(sin texto)"}</a> : p.caption?.slice(0, 80)}
+                                  </td>
+                                  <td className={`py-1.5 pr-3 text-right font-mono ${hot ? "font-bold text-ok" : ""}`}>{fmtNum(p.views)}</td>
+                                  <td className="py-1.5 pr-3 text-right">{fmtNum(p.likes)}</td>
+                                  <td className="py-1.5 text-right">{fmtNum(p.comments)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Section>
+
         {/* Redes */}
-        <Section title="Redes sociales" right={<span className="text-xs text-muted">{s?.dataAsOf ? `Datos de Zernio al ${s.dataAsOf.slice(0, 10)}` : ""}</span>}>
+        <Section title="Redes conectadas (Zernio: alcance e interacciones)" right={<span className="text-xs text-muted">{s?.dataAsOf ? `Datos de Zernio al ${s.dataAsOf.slice(0, 10)}` : ""}</span>}>
           {!client.zernio_profile_id ? (
             <p className="text-sm text-muted">Este cliente no tiene redes conectadas. Conéctalas en su portal, pestaña Publicar.</p>
           ) : m.social?.error ? (

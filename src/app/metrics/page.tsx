@@ -1,6 +1,9 @@
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 import Link from "next/link";
+import { after } from "next/server";
+import { snapshotDue } from "@/server/social-snapshots";
 import { requireAgency } from "@/server/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { loadClientMetrics, metricsClients } from "@/server/metrics";
@@ -26,13 +29,15 @@ export default async function MetricsHome({ searchParams }: { searchParams: Prom
   const all = await metricsClients(db);
   const enabled = all.filter((c) => c.metrics_enabled);
   const rows = await Promise.all(enabled.map((c) => loadClientMetrics(db, c, days)));
+  // la foto diaria de redes públicas: si a alguien le falta la de hoy, se toma al terminar de cargar
+  if (rows.some((r) => !r.publicSocial?.accounts.some((a) => a.latest.day === new Date().toISOString().slice(0, 10)))) after(() => snapshotDue(db).then(() => undefined).catch(() => undefined));
   const total = rows.reduce(
     (a, r) => ({
       visitors: a.visitors + (r.web?.current.visitors ?? 0),
       contacts: a.contacts + (r.web?.contacts ?? 0),
       spend: a.spend + r.adsTotals.spend,
       results: a.results + r.adsTotals.results,
-      followers: a.followers + (r.social?.data?.followers?.gained ?? 0),
+      followers: a.followers + (r.social?.data?.followers?.gained ?? r.publicFollowers?.gained ?? 0),
     }),
     { visitors: 0, contacts: 0, spend: 0, results: 0, followers: 0 },
   );
@@ -81,8 +86,11 @@ export default async function MetricsHome({ searchParams }: { searchParams: Prom
                     <Mini label="Anuncios" value={r.ads?.summaries.length ? fmtMoney(ads.spend) : r.ads?.connections.length ? "Revisar" : "Sin conectar"} sub={ads.results ? `${fmtNum(ads.results)} resultados · ${fmtMoney(ads.spend / ads.results)} c/u` : undefined} />
                     <Mini
                       label="Seguidores"
-                      value={s?.followers?.current != null ? fmtNum(s.followers.current) : r.client.zernio_profile_id ? "–" : "Sin redes"}
-                      sub={s?.followers?.gained ? `${s.followers.gained > 0 ? "+" : ""}${fmtNum(s.followers.gained)} en ${days} días` : undefined}
+                      value={s?.followers?.current ? fmtNum(s.followers.current) : r.publicFollowers ? fmtNum(r.publicFollowers.current) : "Juntando..."}
+                      sub={(() => {
+                        const g = s?.followers?.gained || r.publicFollowers?.gained;
+                        return g ? `${g > 0 ? "+" : ""}${fmtNum(g)} en ${days} días` : undefined;
+                      })()}
                     />
                   </div>
                   {w ? (
