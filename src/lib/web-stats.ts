@@ -19,12 +19,33 @@ const count = <T,>(items: T[], key: (x: T) => string | null) => {
   return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, n }));
 };
 
-export function sourceOf(e: Pick<WebEvent, "ref_domain" | "utm_source">) {
-  if (e.utm_source) return e.utm_source.charAt(0).toUpperCase() + e.utm_source.slice(1);
+const UTM: [RegExp, string][] = [
+  [/^(ig|instagram|igshopping|instagram_stories|instagram_reels)$/i, "Instagram"],
+  [/^(fb|facebook|meta|an|messenger)$/i, "Facebook"],
+  [/^(google|adwords|gads|youtube)$/i, "Google"],
+  [/^(tiktok|tt)$/i, "TikTok"],
+  [/^(chatgpt|chatgpt\.com|openai)$/i, "ChatGPT"],
+];
+const DOMAINS: [RegExp, string][] = [
+  [/chatgpt\.com|openai\.com/, "ChatGPT"],
+  [/perplexity\.ai/, "Perplexity"],
+  [/yahoo\./, "Yahoo"],
+  [/duckduckgo\./, "DuckDuckGo"],
+];
+
+export function sourceOf(e: Pick<WebEvent, "ref_domain" | "utm_source"> & { utm_medium?: string | null }) {
+  if (e.utm_source) {
+    const name = UTM.find(([re]) => re.test(e.utm_source!.trim()))?.[1] ?? e.utm_source.charAt(0).toUpperCase() + e.utm_source.slice(1);
+    // los anuncios traen utm_medium=paid / cpc / ads: se separan de lo orgánico
+    return /paid|cpc|ppc|ads?$|social_paid|display/i.test(e.utm_medium ?? "") ? `${name} (anuncio)` : name;
+  }
   if (!e.ref_domain) return "Directo";
   const d = e.ref_domain.replace(/^www\./, "");
-  return SOCIAL[d] ?? (d.includes("google.") ? "Google" : d);
+  return SOCIAL[d] ?? DOMAINS.find(([re]) => re.test(d))?.[1] ?? (d.includes("google.") ? "Google" : d);
 }
+
+/** Etiqueta de un clic, legible aunque el botón no tenga texto (íconos, flechas de carrusel). */
+const clickLabel = (l: string | null) => (l == null ? null : /^Botón:\s*$/.test(l) ? "Botón sin texto (ícono o flecha)" : l);
 
 export function summarize(events: WebEvent[], days: number) {
   const views = events.filter((e) => e.type === "pageview");
@@ -111,7 +132,7 @@ export function summarize(events: WebEvent[], days: number) {
     countries: count(sess, (s) => s.country).slice(0, 8),
     cities: count(views, (v) => v.city).slice(0, 8),
     browsers: count(sess, (s) => s.first.browser),
-    clicks: count(clicks, (c) => c.label).slice(0, 12),
+    clicks: count(clicks, (c) => clickLabel(c.label)).slice(0, 12),
     series,
   };
 }

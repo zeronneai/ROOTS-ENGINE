@@ -72,7 +72,11 @@
       else if (/instagram\.com|tiktok\.com|facebook\.com/i.test(href)) label = "Red social";
       else if (/calendly|booksy|vagaro|square|acuity|book|agenda|cita/i.test(href + " " + (el.textContent || ""))) label = "Agendar: " + (el.textContent || "").trim().slice(0, 40);
       else if (href && el.host && el.host !== location.host) label = "Sale a " + el.host;
-      else if (el.tagName === "BUTTON") label = "Botón: " + (el.textContent || "").trim().slice(0, 40);
+      else if (el.tagName === "BUTTON") {
+        var img = el.querySelector && el.querySelector("img[alt]");
+        var txt = ((el.textContent || "").trim() || el.getAttribute("aria-label") || el.getAttribute("title") || (img && img.getAttribute("alt")) || "").trim();
+        label = txt ? "Botón: " + txt.slice(0, 40) : "Botón sin texto (ícono o flecha)";
+      }
     }
     if (label) send({ t: "click", p: location.pathname, l: label.slice(0, 80) });
   }, true);
