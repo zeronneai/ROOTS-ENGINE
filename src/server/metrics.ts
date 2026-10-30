@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadEvents } from "./web";
 import { loadPublicSocial, type PublicSocial } from "./social-snapshots";
+import { fetchBusinessMetrics, type BusinessMetrics } from "@/lib/metrics/business";
 import { summarize, type WebSummary } from "@/lib/web-stats";
 import {
   adAccounts,
@@ -14,7 +15,7 @@ import {
   type SocialDashboard,
 } from "@/lib/metrics/zernio-metrics";
 
-export type MetricsClient = { id: string; name: string; city: string | null; zernio_profile_id: string | null; metrics_enabled: boolean; ad_accounts: Record<string, string> | null };
+export type MetricsClient = { id: string; name: string; city: string | null; zernio_profile_id: string | null; metrics_enabled: boolean; ad_accounts: Record<string, string> | null; business_api_url?: string | null };
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -117,11 +118,17 @@ export type ClientMetrics = Awaited<ReturnType<typeof loadClientMetrics>>;
 /** Todo lo medible de un cliente en un periodo: web (nuestro t.js), redes y anuncios (Zernio). */
 export async function loadClientMetrics(db: SupabaseClient, client: MetricsClient, days: number) {
   const r = rangeOf(days);
-  const [web, social, ads, publicSocial] = await Promise.all([
+  const [web, social, ads, publicSocial, business] = await Promise.all([
     webBlock(db, client.id, days).catch(() => null),
     socialBlock(client, r.from, r.to),
     adsBlock(client, r.from, r.to).catch((e) => ({ connections: [], summaries: [], errors: [(e as Error).message], choices: {} }) as AdsBlock),
     loadPublicSocial(db, client.id, r.from).catch(() => null),
+    client.business_api_url
+      ? fetchBusinessMetrics(client.business_api_url, days).then(
+          (data) => ({ data, error: null as string | null }),
+          (e) => ({ data: null as BusinessMetrics | null, error: (e as Error).message }),
+        )
+      : Promise.resolve(null),
   ]);
   const adsTotals = (ads?.summaries ?? []).reduce(
     (a, s) => ({ spend: a.spend + s.totals.spend, results: a.results + s.totals.results, clicks: a.clicks + s.totals.clicks, impressions: a.impressions + s.totals.impressions }),
@@ -133,7 +140,7 @@ export async function loadClientMetrics(db: SupabaseClient, client: MetricsClien
         gained: publicSocial.accounts.some((x) => x.gained != null) ? publicSocial.accounts.reduce((a, x) => a + (x.gained ?? 0), 0) : null,
       }
     : null;
-  return { client, range: r, web, social, ads, adsTotals, publicSocial, publicFollowers, highlights: highlights(web, social, ads, publicSocial) };
+  return { client, range: r, web, social, ads, adsTotals, publicSocial, publicFollowers, business, highlights: [...businessHighlights(business?.data ?? null, web, adsTotals), ...highlights(web, social, ads, publicSocial)] };
 }
 
 export type Highlight = { tone: "good" | "bad" | "info"; text: string };
@@ -188,8 +195,33 @@ function highlights(web: WebBlock, social: SocialBlock, ads: AdsBlock | null, pu
   return out;
 }
 
+/** Ventas, leads y miembros del negocio, cruzados con la web y los anuncios. */
+function businessHighlights(b: BusinessMetrics | null, web: WebBlock, ads: { spend: number }): Highlight[] {
+  if (!b) return [];
+  const out: Highlight[] = [];
+  const cur = b.currency || "USD";
+  const fmt = (x: number) => x.toLocaleString("en-US", { style: "currency", currency: cur, maximumFractionDigits: 0 });
+  const d = pct(b.revenue.total, b.revenue.previous);
+  out.push({ tone: d == null ? "info" : d >= 0 ? "good" : "bad", text: `Ingresos: ${fmt(b.revenue.total)} en el periodo${d != null ? ` (${d >= 0 ? "+" : ""}${d}% contra el anterior)` : ""}, ${b.revenue.payments} pagos.` });
+  if (b.members) {
+    const dm = pct(b.members.new, b.members.previousNew);
+    out.push({ tone: dm != null && dm < 0 ? "bad" : "good", text: `${b.members.new} miembros nuevos${dm != null ? ` (${dm >= 0 ? "+" : ""}${dm}%)` : ""}${b.members.newByPlan[0] ? `, el plan que más se vende es ${b.members.newByPlan[0].name}` : ""}.` });
+    if (b.members.cancellations) out.push({ tone: "bad", text: `${b.members.cancellations} cancelaciones en el periodo${b.members.cancelReasons[0] ? `, la razón principal: ${b.members.cancelReasons[0].name}` : ""}.` });
+  }
+  if (b.leads && b.leads.total) {
+    const rate = Math.round((b.leads.converted / b.leads.total) * 100);
+    out.push({ tone: rate >= 20 ? "good" : "bad", text: `${b.leads.total} leads de clase gratis; ${b.leads.converted} marcados como convertidos (${rate}%). ${rate < 20 ? "Hay que darles seguimiento más rápido." : ""}`.trim() });
+  }
+  if (web && b.members?.new) {
+    const toApp = web.current.clicks.filter((c) => /app\.|months|annual|monthly|mensual|anual|join|membership|membres/i.test(c.name)).reduce((a, c) => a + c.n, 0);
+    if (toApp) out.push({ tone: "info", text: `Embudo: ${toApp} clics del sitio hacia planes o la app, y ${b.members.new} terminaron pagando (${Math.round((b.members.new / toApp) * 100)}%).` });
+  }
+  if (ads.spend > 0 && b.members?.new) out.push({ tone: "info", text: `Costo por miembro nuevo (anuncios / nuevos): ${fmt(ads.spend / b.members.new)}.` });
+  return out;
+}
+
 /** Los clientes del panel. */
 export async function metricsClients(db: SupabaseClient) {
-  const { data } = await db.from("clients").select("id, name, city, zernio_profile_id, metrics_enabled, ad_accounts").order("name");
+  const { data } = await db.from("clients").select("*").order("name");
   return (data ?? []) as MetricsClient[];
 }

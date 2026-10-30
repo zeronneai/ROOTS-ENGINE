@@ -77,6 +77,69 @@ export default async function ClientMetricsPage({ params, searchParams }: { para
           />
         </section>
 
+        {/* Negocio: ventas, leads y miembros desde la app del cliente */}
+        {m.business ? (
+          <Section title="Negocio (ventas, leads y miembros)" right={<span className="text-xs text-muted">Desde la app del cliente</span>}>
+            {m.business.error ? (
+              <p className="text-sm text-bad">No se pudieron leer los números de la app: {m.business.error}</p>
+            ) : m.business.data ? (
+              (() => {
+                const b = m.business.data!;
+                const cur = b.currency || "USD";
+                const days2 = m.range.days;
+                const dayList = Array.from({ length: days2 }, (_, i) => new Date(Date.now() - (days2 - 1 - i) * 864e5).toISOString().slice(0, 10));
+                return (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      <Small label="Ingresos" value={fmtMoney(b.revenue.total, cur)} prev={[b.revenue.total, b.revenue.previous]} />
+                      <Small label="Pagos" value={fmtNum(b.revenue.payments)} />
+                      <Small label="Miembros nuevos" value={fmtNum(b.members?.new)} prev={[b.members?.new, b.members?.previousNew]} />
+                      <Small label="Miembros activos" value={fmtNum(b.members?.active)} />
+                      <Small label="Leads (clase gratis)" value={fmtNum(b.leads?.total)} prev={[b.leads?.total, b.leads?.previous]} />
+                      <Small label="Cancelaciones" value={fmtNum(b.members?.cancellations)} />
+                    </div>
+                    <div className="mt-5">
+                      <TrendChart
+                        days={dayList}
+                        dualAxis
+                        series={[
+                          { name: "Ingresos", color: "#ffb17a", kind: "bar", values: dayList.map((d) => b.revenue.byDay[d] ?? 0), format: (x) => fmtMoney(x, cur) },
+                          { name: "Miembros nuevos", color: "#4f4789", values: dayList.map((d) => b.members?.byDay[d] ?? 0) },
+                        ]}
+                      />
+                    </div>
+                    <div className="mt-6 grid gap-6 lg:grid-cols-4">
+                      <div>
+                        <h3 className="label mb-2">Plan que eligen</h3>
+                        <BarList items={b.members?.newByPlan ?? []} />
+                      </div>
+                      <div>
+                        <h3 className="label mb-2">Paquete que eligen</h3>
+                        <BarList items={b.members?.newByPackage ?? []} color="#ffb17a" />
+                      </div>
+                      <div>
+                        <h3 className="label mb-2">De dónde llegan los leads</h3>
+                        <BarList items={b.leads?.bySource ?? []} color="#15803d" />
+                      </div>
+                      <div>
+                        <h3 className="label mb-2">Por qué cancelan</h3>
+                        <BarList items={b.members?.cancelReasons ?? []} color="#dc2626" />
+                      </div>
+                    </div>
+                    {b.teams || b.tryouts != null || b.events != null ? (
+                      <p className="mt-4 text-xs text-muted">
+                        {b.teams ? `Equipos: ${b.teams.active} activos, ${b.teams.new} nuevos. ` : ""}
+                        {b.tryouts != null ? `Registros a tryouts: ${b.tryouts}. ` : ""}
+                        {b.events != null ? `Registros a eventos: ${b.events}.` : ""}
+                      </p>
+                    ) : null}
+                  </>
+                );
+              })()
+            ) : null}
+          </Section>
+        ) : null}
+
         {/* Sitio web */}
         <Section title="Sitio web" right={w ? <Link href={`/c/${id}/web?dias=${days === 90 ? 90 : days}`} className="text-sm text-purple hover:underline">Ver analítica completa →</Link> : null}>
           {!w ? (

@@ -38,8 +38,9 @@ export default async function MetricsHome({ searchParams }: { searchParams: Prom
       spend: a.spend + r.adsTotals.spend,
       results: a.results + r.adsTotals.results,
       followers: a.followers + (r.social?.data?.followers?.gained ?? r.publicFollowers?.gained ?? 0),
+      revenue: a.revenue + (r.business?.data?.revenue.total ?? 0),
     }),
-    { visitors: 0, contacts: 0, spend: 0, results: 0, followers: 0 },
+    { visitors: 0, contacts: 0, spend: 0, results: 0, followers: 0, revenue: 0 },
   );
 
   return (
@@ -93,6 +94,13 @@ export default async function MetricsHome({ searchParams }: { searchParams: Prom
                       })()}
                     />
                   </div>
+                  {r.business?.data ? (
+                    <div className="mt-3 rounded-xl bg-ok/5 px-3 py-2 text-sm">
+                      <span className="font-semibold">{fmtMoney(r.business.data.revenue.total, r.business.data.currency)}</span> en ingresos
+                      <Delta cur={r.business.data.revenue.total} prev={r.business.data.revenue.previous} />
+                      {r.business.data.members ? <span className="text-muted"> · {fmtNum(r.business.data.members.new)} miembros nuevos</span> : null}
+                    </div>
+                  ) : null}
                   {w ? (
                     <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3 text-xs text-muted">
                       <span>Visitas por día</span>
