@@ -8,12 +8,15 @@ const COLS = "ts, type, visitor, session, path, title, ref_domain, utm_source, u
 
 /** Eventos de un sitio desde una fecha (en páginas de 1000, máx 50 mil). */
 export async function loadEvents(db: SupabaseClient, siteId: string, since: Date) {
+  // Supabase entrega como máximo "Max rows" filas por llamada (puede ser menos de 1000):
+  // se sigue pidiendo hasta que ya no regrese nada, avanzando lo que sí regresó.
   const out: WebEvent[] = [];
-  for (let from = 0; from < 50_000; from += 1000) {
+  for (let from = 0; from < 50_000; ) {
     const { data, error } = await db.from("web_events").select(COLS).eq("site_id", siteId).gte("ts", since.toISOString()).order("ts", { ascending: false }).range(from, from + 999);
     if (error) throw error;
-    out.push(...((data ?? []) as WebEvent[]));
-    if (!data || data.length < 1000) break;
+    if (!data?.length) break;
+    out.push(...(data as WebEvent[]));
+    from += data.length;
   }
   return out;
 }
