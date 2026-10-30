@@ -3,5 +3,5 @@ alter table clients add column if not exists metrics_enabled boolean not null de
 -- cuenta publicitaria elegida por conexión de anuncios: { "<zernio account id>": "act_123" }
 alter table clients add column if not exists ad_accounts jsonb not null default '{}'::jsonb;
 
--- Para empezar: El Toro (Mario Yague) y DejaVu
-update clients set metrics_enabled = true where name ~* 'yague|el toro|deja ?vu';
+-- Para empezar: El Toro (Mario Yague), Torque, DejaVu y Tippin'
+update clients set metrics_enabled = true where name ~* 'yague|el toro|torque|deja ?vu|tippin';
