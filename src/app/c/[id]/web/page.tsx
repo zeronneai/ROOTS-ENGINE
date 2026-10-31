@@ -204,6 +204,13 @@ export default async function WebPage({ params, searchParams }: { params: Promis
                 <CopyText text={snippet} label="Copiar código" />
                 <form action={deleteSiteAction.bind(null, id, site.id)}><SubmitButton className="btn btn-ghost text-bad">Quitar sitio</SubmitButton></form>
               </div>
+              {site.read_token ? (
+                <div className="mt-4 rounded-lg border border-line p-3">
+                  <p className="font-semibold">Token de lectura</p>
+                  <p className="mt-1 text-xs text-muted">Para que el panel propio del cliente muestre estas visitas (GET /api/sites/stats con Authorization: Bearer). Solo lee, va en el servidor del cliente, nunca en el navegador.</p>
+                  <div className="mt-2"><CopyText text={site.read_token} label="Copiar token" /></div>
+                </div>
+              ) : null}
               <p className="mt-3 text-xs text-muted">Para medir un botón específico, agrégale data-track=&quot;Nombre&quot;. Las llamadas, WhatsApp, correo y botones de agendar se miden solos.</p>
               <form action={addSiteAction.bind(null, id)} className="mt-4 flex gap-2">
                 <input name="domain" className="input" placeholder="Otro dominio del cliente" required />
