@@ -15,6 +15,7 @@ import {
   toggleFolderAutoAction,
 } from "@/app/queue-actions";
 import { saveCaptionRulesAction } from "@/app/publish-actions";
+import { CopyText } from "@/components/rebrand/CopyText";
 
 type Item = {
   id: string;
@@ -49,7 +50,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
       .order("created_at", { ascending: true })
       .limit(200),
     db.from("scheduled_posts").select("scheduled_for").eq("client_id", id).eq("media_source", "queue").eq("status", "waiting_media").order("scheduled_for").limit(30),
-    db.from("clients").select("caption_rules, caption_footer").eq("id", id).single(),
+    db.from("clients").select("caption_rules, caption_footer, panel_token").eq("id", id).single(),
   ]);
   const items = (rows ?? []) as unknown as Item[];
   const by = (s: string) => items.filter((i) => i.status === s);
@@ -107,6 +108,17 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
             video, ese es el copy.
           </p>
         </section>
+      ) : null}
+
+      {isAgency && rules?.panel_token ? (
+        <details className="card mb-8 p-5 text-sm">
+          <summary className="cursor-pointer font-semibold">Panel propio del cliente</summary>
+          <p className="mt-2 text-xs text-muted">
+            Para que el cliente apruebe desde su propio panel (por ejemplo /clinic de DejaVu): ve estos mismos videos, edita el copy, escoge el texto viral y aprueba.
+            Va en el servidor del panel como ROOTS_PANEL_TOKEN (GET y POST /api/panel/content con Authorization: Bearer). No le da acceso a las carpetas de Dropbox.
+          </p>
+          <div className="mt-2"><CopyText text={rules.panel_token} label="Copiar token" /></div>
+        </details>
       ) : null}
 
       {isAgency ? (
