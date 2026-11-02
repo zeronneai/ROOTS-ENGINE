@@ -28,6 +28,7 @@ type Item = {
   version: number | null;
   media_path: string | null;
   overlay_text: string | null;
+  post_on: string | null;
   approved_at: string | null;
   approved_by: string | null;
   error: string | null;
@@ -45,7 +46,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
     db.from("content_folders").select("*").eq("client_id", id).order("created_at"),
     db
       .from("queue_items")
-      .select("id, file_name, kind, status, caption, hooks, captions, version, media_path, overlay_text, approved_at, approved_by, error, created_at, scheduled_posts!queue_items_scheduled_post_id_fkey(status, scheduled_for, results)")
+      .select("id, file_name, kind, status, caption, hooks, captions, version, media_path, overlay_text, post_on, approved_at, approved_by, error, created_at, scheduled_posts!queue_items_scheduled_post_id_fkey(status, scheduled_for, results)")
       .eq("client_id", id)
       .order("created_at", { ascending: true })
       .limit(200),
@@ -166,6 +167,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ id: st
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-2 whitespace-pre-wrap">{i.caption || <span className="text-muted">Sin copy</span>}</div>
                   <div className="mt-1 text-xs text-muted">
+                    {i.post_on ? `El cliente quiere que salga el ${new Date(i.post_on + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })} · ` : ""}
                     {slotDates[k] ? `Sale ${fmtDateTime(slotDates[k])}` : "Sin fecha todavía (falta un día libre en el calendario fijo)"}
                     {i.overlay_text ? ` · texto: "${i.overlay_text}"` : ""}
                     {i.approved_by ? ` · aprobó ${i.approved_by}` : ""}
