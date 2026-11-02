@@ -9,7 +9,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { listDropboxFolder, mimeFor } from "../lib/dropbox";
 import { withFooter } from "../lib/ai/caption";
 import { runWithClient } from "../lib/usage";
-import { analyzeMedia, shrinkVideo } from "./auto-caption";
+import { analyzeMedia, coverFromFrame, shrinkVideo } from "./auto-caption";
+import { pickCover } from "../lib/ai/caption";
 import { clientFooter, generateCaptions, generateHooks } from "./captions";
 import { notifyNewForApproval } from "./queue-notify";
 
@@ -127,9 +128,24 @@ async function scanFolder(db: SupabaseClient, folder: Folder, log: (m: string) =
       if (f.caption) options.unshift({ kind: "editor", text: withFooter(f.caption, footer) });
       // los textos virales en el mismo idioma que el video (el que detectó la IA al escribir los copys)
       const hooks = f.kind === "video" ? (await generateHooks(db, folder.client_id, { frames, transcript, language: written.language })).hooks : [];
+      // portada sugerida: la IA escoge el mejor cuadro y se guarda en alta; si falla, el video sale sin portada
+      let cover: { cover_path: string; cover_time: number } | Record<string, never> = {};
+      if (f.kind === "video" && frames.length) {
+        try {
+          const pick = await pickCover(frames);
+          const shot = coverFromFrame(media.buffer, media.name, pick.frame - 1, 6);
+          if (shot) {
+            const coverPath = `${folder.client_id}/queue/${item.id}-cover.jpg`;
+            const { error: cErr } = await db.storage.from("recordings").upload(coverPath, shot.buffer, { contentType: "image/jpeg", upsert: true });
+            if (!cErr) cover = { cover_path: coverPath, cover_time: shot.time };
+          }
+        } catch (e) {
+          log(`   (sin portada: ${(e as Error).message.slice(0, 80)})`);
+        }
+      }
       await db
         .from("queue_items")
-        .update({ media_path: mediaPath, caption: options[0].text.slice(0, 2200), captions: options, transcript, hooks, status: "pending", error: null })
+        .update({ media_path: mediaPath, caption: options[0].text.slice(0, 2200), captions: options, transcript, hooks, ...cover, status: "pending", error: null })
         .eq("id", item.id);
       added++;
     } catch (e) {

@@ -121,3 +121,25 @@ ${input.hint?.trim() ? `NOTES FROM THE TEAM: ${json(input.hint)}` : ""}`,
   });
   return out.hooks.slice(0, 3).map((h) => ({ ...h, text: h.text.replace(/\s*[—–]\s*/g, ", ").trim() }));
 }
+
+const CoverSchema = z.object({
+  frame: z.number().int().describe("Número de la foto (empieza en 1) que mejor funciona como portada"),
+  why: z.string().describe("Por qué, en una frase corta"),
+});
+
+/** Escoge la mejor foto del video para la portada del Reel. */
+export async function pickCover(frames: { data: string; mediaType: "image/jpeg" }[]) {
+  if (frames.length < 2) return { frame: 1, why: "" };
+  const out = await structured({
+    schema: CoverSchema,
+    label: "Portada",
+    maxTokens: 300,
+    images: frames.slice(0, 8),
+    system: `${AGENCY_CONTEXT}
+You choose the cover frame for a vertical Reel. The images are frames of the same video, numbered from 1 in order.
+Pick the one that would make someone stop scrolling on a profile grid: a clear face looking at the camera with eyes open and a natural expression (not mid-word, not blinking), or the clearest shot of the product or result. A frame with a title card or big on-screen text is a strong cover. Avoid blur, motion, half-closed eyes and dark frames.
+No em dashes or long dashes.`,
+    user: `There are ${Math.min(frames.length, 8)} frames. Answer with the frame number.`,
+  });
+  return { frame: Math.min(Math.max(1, out.frame), Math.min(frames.length, 8)), why: out.why.replace(/\s*[—–]\s*/g, ", ") };
+}

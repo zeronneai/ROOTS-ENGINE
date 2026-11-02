@@ -91,3 +91,24 @@ export function extractFrames(input: string, dir: string, kind: "video" | "image
     .sort()
     .map((f) => ({ data: readFileSync(path.join(dir, f)).toString("base64"), mediaType: "image/jpeg" as const }));
 }
+
+/** Saca la portada en alta (1080 de ancho) del cuadro n de los que vio la IA (mismos tiempos que extractFrames). */
+export function coverFromFrame(buffer: Buffer, name: string, frameIndex: number, count = 6): { buffer: Buffer; time: number } | null {
+  const dir = mkdtempSync(path.join(tmpdir(), "roots-cover-"));
+  try {
+    const input = path.join(dir, `in${path.extname(name) || ".mp4"}`);
+    const output = path.join(dir, "cover.jpg");
+    writeFileSync(input, buffer);
+    let duration = 10;
+    try {
+      duration = Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", input]).toString().trim()) || 10;
+    } catch {}
+    const time = Math.round(((frameIndex + 0.5) / count) * duration * 10) / 10;
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", time.toFixed(2), "-i", input, "-vf", "scale='min(1080,iw)':-2", "-frames:v", "1", "-q:v", "3", output]);
+    return { buffer: readFileSync(output), time };
+  } catch {
+    return null;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
