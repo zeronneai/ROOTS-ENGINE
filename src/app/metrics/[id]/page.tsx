@@ -12,6 +12,9 @@ import { BarList, Kpi, TrendChart } from "@/components/metrics/Charts";
 import { fmtMoney, fmtNum, fmtPct, parseDays, RANGES } from "@/components/metrics/fmt";
 import { chooseAdAccountAction, connectAdsAction, refreshSocialAction, setMetricsEnabledAction } from "@/app/metrics-actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { ReportButton } from "@/components/metrics/ReportButton";
+import { latestMetricsReport } from "@/server/metrics-report";
+import { fmtDate } from "@/lib/time";
 
 const PLATFORM: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook", youtube: "YouTube", threads: "Threads", googlebusiness: "Google" };
 const fmtSec = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`);
@@ -24,7 +27,7 @@ export default async function ClientMetricsPage({ params, searchParams }: { para
   const db = supabaseAdmin();
   const client = (await metricsClients(db)).find((c) => c.id === id);
   if (!client) notFound();
-  const m = await loadClientMetrics(db, client, days);
+  const [m, lastReport] = await Promise.all([loadClientMetrics(db, client, days), latestMetricsReport(db, id).catch(() => null)]);
   const w = m.web;
   const s = m.social?.data;
   const ads = m.ads;
@@ -40,6 +43,12 @@ export default async function ClientMetricsPage({ params, searchParams }: { para
               {r} días
             </Link>
           ))}
+          <ReportButton clientId={id} days={days} />
+          {lastReport ? (
+            <Link href={`/metrics/${id}/reporte/${lastReport.id}`} className="btn btn-ghost !py-1.5 text-xs">
+              Último reporte ({fmtDate(lastReport.created_at, { day: "numeric", month: "short" })})
+            </Link>
+          ) : null}
         </PageTitle>
 
         {sp.anuncios === "conectado" ? <p className="mb-4 rounded-xl bg-ok/10 p-3 text-sm text-ok">Listo, la cuenta de anuncios quedó conectada. Los números pueden tardar unos minutos en aparecer.</p> : null}
