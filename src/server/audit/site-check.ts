@@ -37,6 +37,10 @@ export type SiteCheck = {
   text: string | null;
   /** probablemente armado con JavaScript: casi no trae texto en el HTML */
   clientRendered: boolean;
+  /** el sitio no dejó entrar a nuestro revisor (403, Cloudflare) pero sí existe y lo leímos ya renderizado */
+  blockedBots: boolean;
+  /** lo leímos con un navegador (renderizado), no solo el HTML crudo */
+  rendered: boolean;
 };
 
 const decode = (s: string) =>
@@ -126,6 +130,8 @@ export async function checkSite(raw: string): Promise<SiteCheck> {
     socials: { instagram: [], tiktok: [], facebook: [], youtube: [] },
     text: null,
     clientRendered: false,
+    blockedBots: false,
+    rendered: false,
   };
   const t0 = Date.now();
   let html: string;
@@ -143,13 +149,57 @@ export async function checkSite(raw: string): Promise<SiteCheck> {
     base.ok = res.ok;
     if (!res.ok) {
       base.error = `El sitio respondió ${res.status}`;
+      // muchos sitios (Cloudflare, Wix, Shopify) le cierran la puerta a robots: lo leemos renderizado
+      const r = await rendered(base.finalUrl || url);
+      if (!r) return base;
+      parse(base, r);
+      base.ok = true;
+      base.blockedBots = true;
+      base.rendered = true;
+      base.error = null;
       return base;
     }
   } catch (e) {
     base.error = (e as Error).name === "TimeoutError" ? "No cargó en 15 segundos" : `No se pudo abrir: ${(e as Error).message}`;
+    const r = await rendered(url);
+    if (!r) return base;
+    parse(base, r);
+    base.ok = true;
+    base.rendered = true;
+    base.error = null;
     return base;
   }
 
+  parse(base, html);
+  // armado con JavaScript (React, Vite, Wix): el HTML crudo casi no trae nada, lo leemos renderizado
+  if (base.clientRendered) {
+    const r = await rendered(base.finalUrl || url);
+    if (r) {
+      const htmlKb = base.htmlKb;
+      parse(base, r);
+      base.htmlKb = htmlKb;
+      base.rendered = true;
+    }
+  }
+  return base;
+}
+
+/** El HTML ya renderizado (con JavaScript corrido), con el lector de Jina. Null si no se pudo. */
+async function rendered(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://r.jina.ai/${url}`, {
+      signal: AbortSignal.timeout(25000),
+      headers: { "X-Return-Format": "html", ...(process.env.JINA_API_KEY ? { Authorization: `Bearer ${process.env.JINA_API_KEY}` } : {}) },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return html.length > 200 ? html : null;
+  } catch {
+    return null;
+  }
+}
+
+function parse(base: SiteCheck, html: string) {
   base.htmlKb = Math.round(Buffer.byteLength(html) / 1024);
   const body = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
 
@@ -200,7 +250,6 @@ export async function checkSite(raw: string): Promise<SiteCheck> {
   const text = strip(body);
   base.text = text ? text.slice(0, 6000) : null;
   base.clientRendered = text.length < 300;
-  return base;
 }
 
 /** Normaliza lo que escriben (link, @handle o handle) a un handle limpio. */

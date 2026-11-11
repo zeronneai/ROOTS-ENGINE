@@ -43,6 +43,7 @@ async function runActor<T>(actor: string, input: unknown): Promise<T[]> {
     "clockworks~tiktok-scraper": "TikTok",
     "compass~crawler-google-places": "Google Maps",
     "apify~instagram-profile-scraper": "Instagram: perfiles",
+    "apify~google-search-scraper": "Google: búsqueda",
   };
   void recordUsage({
     kind: "apify",
@@ -182,12 +183,15 @@ export type GooglePlace = {
   hours: string[];
   url: string | null;
   reviews: { stars: number | null; text: string; date: string | null }[];
+  /** redes que Google Maps tiene ligadas al negocio (solo cuando se piden contactos) */
+  socials: { instagram: string[]; facebook: string[]; tiktok: string[] };
 };
 
 type GmItem = Record<string, unknown> & {
   title?: string; categoryName?: string; address?: string; phone?: string; website?: string; totalScore?: number;
   reviewsCount?: number; url?: string; openingHours?: { day?: string; hours?: string }[];
   reviews?: { text?: string | null; stars?: number; publishedAtDate?: string }[];
+  instagrams?: string[]; facebooks?: string[]; tiktoks?: string[];
 };
 
 function mapPlace(i: GmItem): GooglePlace {
@@ -204,12 +208,15 @@ function mapPlace(i: GmItem): GooglePlace {
     reviews: (i.reviews ?? [])
       .filter((r) => r.text)
       .map((r) => ({ stars: num(r.stars), text: String(r.text).slice(0, 400), date: r.publishedAtDate ?? null })),
+    socials: { instagram: strs(i.instagrams), facebook: strs(i.facebooks), tiktok: strs(i.tiktoks) },
   };
 }
 
+const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x).slice(0, 3) : []);
+
 /** Perfil de Google del negocio: por link de Google Maps o buscando nombre + ciudad. */
-export async function scrapeGooglePlace(opts: { url?: string | null; query?: string; location?: string | null }, maxReviews = 60) {
-  const input: Record<string, unknown> = { maxReviews, reviewsSort: "newest", maxImages: 0, language: "es", scrapeReviewsPersonalData: false };
+export async function scrapeGooglePlace(opts: { url?: string | null; query?: string; location?: string | null; contacts?: boolean }, maxReviews = 60) {
+  const input: Record<string, unknown> = { ...(opts.contacts ? { scrapeContacts: true } : {}), maxReviews, reviewsSort: "newest", maxImages: 0, language: "es", scrapeReviewsPersonalData: false };
   if (opts.url) input.startUrls = [{ url: opts.url }];
   else {
     input.searchStringsArray = [opts.query];
@@ -221,8 +228,9 @@ export async function scrapeGooglePlace(opts: { url?: string | null; query?: str
 }
 
 /** Hasta `n` resultados de Google para un nombre + ciudad, para escoger el que sí es el negocio. */
-export async function searchGooglePlaces(query: string, location: string | null, n = 3, maxReviews = 40) {
+export async function searchGooglePlaces(query: string, location: string | null, n = 3, maxReviews = 40, contacts = false) {
   const input: Record<string, unknown> = {
+    ...(contacts ? { scrapeContacts: true } : {}),
     searchStringsArray: [query],
     maxCrawledPlacesPerSearch: n,
     maxReviews,
@@ -355,4 +363,19 @@ export async function scrapeTiktokProfile(handle: string, perAccount = 15): Prom
       url: p.url,
     })),
   };
+}
+
+// ───────────────────────────── Búsqueda en Google (auditorías) ─────────────────────────────
+
+const GSEARCH_ACTOR = process.env.APIFY_GSEARCH_ACTOR || "apify~google-search-scraper";
+
+export type SearchResult = { url: string; title: string; description: string };
+
+/** Resultados orgánicos de Google (primera página) para varias búsquedas. Sirve para encontrar el sitio y las redes de un negocio. */
+export async function googleSearch(queries: string[], perQuery = 10): Promise<SearchResult[]> {
+  const list = queries.map((q) => q.trim()).filter(Boolean);
+  if (!list.length) return [];
+  type Item = { organicResults?: { url?: string; title?: string; description?: string }[] };
+  const items = await runActor<Item>(GSEARCH_ACTOR, { queries: list.join("\n"), resultsPerPage: perQuery, maxPagesPerQuery: 1, countryCode: "us", mobileResults: false, saveHtml: false });
+  return items.flatMap((i) => (i.organicResults ?? []).filter((r) => r.url).map((r) => ({ url: r.url!, title: r.title ?? "", description: r.description ?? "" })));
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { median, scrapeGoogleLocalMarket, scrapeGooglePlace, scrapeInstagramProfiles, searchGooglePlaces, scrapeTiktokProfile, type GooglePlace, type SocialProfile } from "@/lib/scrape/apify";
+import { googleSearch, median, scrapeGoogleLocalMarket, scrapeGooglePlace, scrapeInstagramProfiles, searchGooglePlaces, scrapeTiktokProfile, type GooglePlace, type SocialProfile } from "@/lib/scrape/apify";
 import { writeClosing, writeDiagnosis, type AuditDraft, type AuditInput, type AuditReport } from "@/lib/ai/audit";
 import { checkSite, handleOf, type SiteCheck } from "./audit/site-check";
 import type { AuditStepId } from "@/lib/audit-steps";
@@ -35,6 +35,8 @@ export type AuditRow = {
 type Market = Omit<GooglePlace, "reviews">;
 
 export type Research = {
+  /** lo que encontramos solos (búsqueda en Google, bio de Instagram, perfil de Google Maps) */
+  discovery?: { found: { field: "website" | "instagram" | "tiktok" | "facebook"; value: string; source: string }[]; searchedWeb: boolean };
   google?: {
     place: GooglePlace | null;
     /** qué tan seguros estamos de que ese perfil de Google es el del negocio */
@@ -159,18 +161,74 @@ function nameScore(a: string, b: string) {
   return hits / Math.max(A.size, B.length);
 }
 
+/** Últimos 10 dígitos de un teléfono, para comparar sin formato. */
+const digits = (v: string | null | undefined) => {
+  const d = (v ?? "").replace(/\D/g, "");
+  return d.length >= 10 ? d.slice(-10) : null;
+};
+
+/** ¿Un @ o un dominio pegado (marioyaguelaw) trae alguna palabra fuerte del nombre del negocio? */
+function compactMatch(name: string, handleOrHost: string) {
+  const h = handleOrHost.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const strong = words(name).filter((w) => w.length >= 4 && !["law", "firm", "office", "shop", "studio", "spa", "bar", "grill", "cafe", "store", "center", "group", "services"].includes(w));
+  return !!h && strong.some((w) => h.includes(w));
+}
+
+const DIRECTORIES =
+  /yelp\.|yellowpages|bbb\.org|mapquest|tripadvisor|foursquare|manta\.com|chamberofcommerce|nextdoor|angi\.com|thumbtack|avvo|justia|findlaw|lawyers\.com|martindale|superpages|birdeye|zocdoc|healthgrades|groupon|doordash|ubereats|grubhub|opentable|wikipedia|indeed|glassdoor|linkedin|bing\.com|google\.|waze|instagram|tiktok|facebook|fb\.com|youtube|twitter|x\.com|threads|pinterest|reddit|booksy|vagaro|fresha|styleseat|dexknows|cylex|hotfrog|brownbook|bizapedia|opencorporates|loc8nearme|n49|merchantcircle|elpasotimes|kfoxtv|ktsm|kvia/i;
+
+const handleFrom = (url: string, re: RegExp) => {
+  const h = url.match(re)?.[1]?.toLowerCase();
+  return h && !["p", "reel", "reels", "explore", "stories", "tv", "share", "sharer.php", "pages", "groups", "events", "watch", "hashtag", "discover", "tag", "music", "video", "people", "public", "login", "photo.php", "profile.php"].includes(h) ? h : null;
+};
+
+/**
+ * Busca al negocio en Google (como lo haría un cliente) para encontrar su sitio y sus redes
+ * cuando no nos las dieron. Solo regresa candidatos cuyo @ o dominio se parece al nombre.
+ */
+async function discover(a: AuditRow) {
+  const name = a.business_name.replace(/^@/, "");
+  const city = (a.city || "El Paso, TX").split(",")[0];
+  const results = await googleSearch([`"${name}" ${city}`, `${name} ${city} instagram`, `${name} ${city} tiktok facebook`]);
+  const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))];
+  const ig = uniq(results.map((r) => handleFrom(r.url, /instagram\.com\/([A-Za-z0-9._]+)/i)));
+  const tt = uniq(results.map((r) => handleFrom(r.url, /tiktok\.com\/@([A-Za-z0-9._]+)/i)));
+  const fb = uniq(results.map((r) => handleFrom(r.url, /facebook\.com\/([A-Za-z0-9.\-]+)/i)));
+  const site = results.find((r) => {
+    const host = hostOf(r.url);
+    if (!host || DIRECTORIES.test(host)) return false;
+    return compactMatch(name, host.split(".").slice(0, -1).join("")) || nameScore(name, r.title.split(/[|\-:]/)[0] ?? "") >= 0.75;
+  });
+  return {
+    website: site ? `https://${hostOf(site.url)}` : null,
+    instagram: ig.filter((h) => compactMatch(name, h)).concat(ig.filter((h) => !compactMatch(name, h))).slice(0, 3),
+    tiktok: tt.filter((h) => compactMatch(name, h)).slice(0, 1),
+    facebook: fb.filter((h) => compactMatch(name, h)).slice(0, 1),
+  };
+}
+
 async function stepGoogle(a: AuditRow): Promise<Research["google"]> {
   const location = a.city || "El Paso, TX";
   const ownHost = hostOf(a.website);
   const findPlace = async (): Promise<Pick<NonNullable<Research["google"]>, "place" | "match" | "alternatives">> => {
     if (a.google_maps_url) {
-      const place = await scrapeGooglePlace({ url: a.google_maps_url }, 40).catch((e) => (console.error(e), null));
+      const place = await scrapeGooglePlace({ url: a.google_maps_url, contacts: true }, 40).catch((e) => (console.error(e), null));
       return { place, match: place ? "link" : "none", alternatives: [] };
     }
-    const found = await searchGooglePlaces(a.business_name, location, 3, 40).catch((e) => (console.error(e), [] as GooglePlace[]));
+    const found = await searchGooglePlaces(a.business_name, location, 3, 40, true).catch((e) => (console.error(e), [] as GooglePlace[]));
     if (!found.length) return { place: null, match: "none", alternatives: [] };
+    const ownPhone = digits(a.contact_phone);
+    const ownIg = handleOf(a.instagram, "instagram");
+    // además del nombre, cualquier dato que coincida confirma que es el suyo: su sitio, su teléfono o su Instagram
     const scored = found
-      .map((p) => ({ p, score: nameScore(a.business_name, p.title) + (ownHost && hostOf(p.website) === ownHost ? 1 : 0) }))
+      .map((p) => ({
+        p,
+        score:
+          Math.max(nameScore(a.business_name, p.title), compactMatch(a.business_name, p.title) ? 0.6 : 0) +
+          (ownHost && hostOf(p.website) === ownHost ? 1 : 0) +
+          (ownPhone && digits(p.phone) === ownPhone ? 1 : 0) +
+          (ownIg && p.socials.instagram.some((u) => handleOf(u, "instagram") === ownIg) ? 1 : 0),
+      }))
       .sort((x, y) => y.score - x.score);
     const best = scored[0];
     const match = best.score >= 1 ? "sure" : best.score >= 0.6 ? "likely" : "unsure";
@@ -207,7 +265,7 @@ async function stepReviews(r: Research): Promise<NonNullable<Research["google"]>
 }
 
 async function stepWeb(a: AuditRow, r: Research): Promise<Research["web"]> {
-  const ownUrl = a.website || r.google?.place?.website || null;
+  const ownUrl = a.website || (r.google?.match !== "unsure" ? r.google?.place?.website : null) || null;
   const comps = topCompetitors(r, 4).filter((m) => m.website);
   const [own, ...others] = await Promise.all([ownUrl ? checkSite(ownUrl) : Promise.resolve(null), ...comps.map((m) => checkSite(m.website!))]);
   return {
@@ -243,11 +301,17 @@ async function stepSocial(a: AuditRow, r: Research): Promise<Research["social"]>
     .filter((c): c is { business: string; handle: string } => !!c.handle && c.handle !== ig)
     .slice(0, 4);
 
-  const [igProfiles, ttProfile] = await Promise.all([
+  const [igProfiles, ttFirst] = await Promise.all([
     scrapeInstagramProfiles([...(ig ? [ig] : []), ...compIg.map((c) => c.handle)]).catch((e) => (console.error(e), [] as SocialProfile[])),
     tt ? scrapeTiktokProfile(tt).catch((e) => (console.error(e), null)) : Promise.resolve(null),
   ]);
   const byHandle = new Map(igProfiles.map((p) => [p.handle, p]));
+  // Apify a veces falla a la primera: un segundo intento antes de decir que no se pudo leer
+  if (ig && !byHandle.get(ig)) {
+    const [again] = await scrapeInstagramProfiles([ig]).catch(() => [] as SocialProfile[]);
+    if (again) byHandle.set(ig, again);
+  }
+  const ttProfile = ttFirst ?? (tt ? await scrapeTiktokProfile(tt).catch(() => null) : null);
   const own: NonNullable<Research["social"]>["own"] = [];
   if (ig) own.push(byHandle.get(ig) ? withStats(byHandle.get(ig)!) : { platform: "instagram", handle: ig, notFound: true });
   if (tt) own.push(ttProfile ? withStats(ttProfile) : { platform: "tiktok", handle: tt, notFound: true });
@@ -267,21 +331,81 @@ export async function runAuditStep(db: SupabaseClient, id: string, step: AuditSt
     const research: Research = { ...(a.research ?? {}) };
     let note: string | null = null;
     if (step === "google") {
-      // de su Instagram sacamos su sitio (el link de la bio) y, si solo nos dieron el @, su nombre real
-      const ig = a.business_name.startsWith("@") ? a.business_name : handleOf(a.instagram, "instagram");
-      if (ig && (!a.website || a.business_name.startsWith("@"))) {
-        const [p] = await scrapeInstagramProfiles([ig]).catch(() => [] as SocialProfile[]);
-        if (p) {
-          if (a.business_name.startsWith("@") && p.name) a.business_name = p.name;
-          if (!a.website && p.link) a.website = await realSite(p.link);
-          if (!a.instagram) a.instagram = p.handle;
-          await save(db, id, { business_name: a.business_name, website: a.website, instagram: a.instagram });
+      const found: NonNullable<Research["discovery"]>["found"] = [];
+      // 1) su Instagram (si nos lo dieron) y una búsqueda en Google, al mismo tiempo
+      const igGiven = a.business_name.startsWith("@") ? a.business_name : handleOf(a.instagram, "instagram");
+      const needsSearch = !a.website || !a.instagram || !a.tiktok || !a.facebook;
+      const [igProfile, disc] = await Promise.all([
+        igGiven ? scrapeInstagramProfiles([igGiven]).then((x) => x[0] ?? null).catch(() => null) : Promise.resolve(null),
+        needsSearch ? discover(a).catch((e) => (console.error(e), null)) : Promise.resolve(null),
+      ]);
+      if (igProfile) {
+        if (a.business_name.startsWith("@") && igProfile.name) a.business_name = igProfile.name;
+        if (!a.instagram) a.instagram = igProfile.handle;
+        if (!a.website && igProfile.link) {
+          a.website = await realSite(igProfile.link);
+          if (a.website) found.push({ field: "website", value: a.website, source: "bio de Instagram" });
         }
       }
+      // 2) su Instagram desde Google, confirmado: el nombre o el @ se parecen, o su link lleva a su sitio
+      if (!a.instagram && disc?.instagram.length) {
+        const profiles = await scrapeInstagramProfiles(disc.instagram).catch(() => [] as SocialProfile[]);
+        const site = hostOf(a.website ?? disc.website);
+        const best = profiles
+          .map((p) => ({ p, s: (compactMatch(a.business_name, p.handle) ? 0.6 : 0) + nameScore(a.business_name, p.name ?? "") + (site && hostOf(p.link) === site ? 1 : 0) }))
+          .sort((x, y) => y.s - x.s)[0];
+        if (best && best.s >= 0.6) {
+          a.instagram = best.p.handle;
+          found.push({ field: "instagram", value: best.p.handle, source: "búsqueda en Google" });
+          if (!a.website && best.p.link) {
+            a.website = await realSite(best.p.link);
+            if (a.website) found.push({ field: "website", value: a.website, source: "bio de Instagram" });
+          }
+        }
+      }
+      if (!a.website && disc?.website) {
+        a.website = disc.website;
+        found.push({ field: "website", value: a.website, source: "búsqueda en Google" });
+      }
+      if (!a.tiktok && disc?.tiktok[0]) {
+        a.tiktok = disc.tiktok[0];
+        found.push({ field: "tiktok", value: a.tiktok, source: "búsqueda en Google" });
+      }
+      if (!a.facebook && disc?.facebook[0]) {
+        a.facebook = `facebook.com/${disc.facebook[0]}`;
+        found.push({ field: "facebook", value: a.facebook, source: "búsqueda en Google" });
+      }
+
+      // 3) su perfil de Google Maps (con más pistas para confirmar que es el suyo)
       research.google = await stepGoogle(a);
+      const g = research.google;
+      // si Google Maps confirma su perfil, también trae sus redes
+      if (g?.place && g.match !== "unsure") {
+        if (!a.website && g.place.website) {
+          a.website = g.place.website;
+          found.push({ field: "website", value: a.website, source: "perfil de Google" });
+        }
+        const pIg = g.place.socials.instagram.map((u) => handleOf(u, "instagram")).find(Boolean);
+        if (!a.instagram && pIg) {
+          a.instagram = pIg;
+          found.push({ field: "instagram", value: pIg, source: "perfil de Google" });
+        }
+        const pTt = g.place.socials.tiktok.map((u) => handleOf(u, "tiktok")).find(Boolean);
+        if (!a.tiktok && pTt) {
+          a.tiktok = pTt;
+          found.push({ field: "tiktok", value: pTt, source: "perfil de Google" });
+        }
+        if (!a.facebook && g.place.socials.facebook[0]) {
+          a.facebook = g.place.socials.facebook[0];
+          found.push({ field: "facebook", value: a.facebook, source: "perfil de Google" });
+        }
+      }
+      research.discovery = { found, searchedWeb: !!disc };
+      await save(db, id, { business_name: a.business_name, website: a.website, instagram: a.instagram, tiktok: a.tiktok, facebook: a.facebook });
       note = research.google?.place
         ? `${research.google.place.title}${research.google.match === "unsure" ? " (no es seguro que sea el suyo)" : ""}: ${research.google.place.rating ?? "sin"} ★ (${research.google.place.reviewsCount ?? 0} reseñas), ${research.google.localMarket.length} negocios en su zona`
         : `No lo encontré en Google. ${research.google?.localMarket.length ?? 0} negocios en su zona`;
+      if (found.length) note += `. Encontré solo: ${found.map((f) => `${f.field} (${f.source})`).join(", ")}`;
     } else if (step === "reviews") {
       if (!research.google) throw new Error("Primero corre el paso de Google");
       research.google = { ...research.google, competitorReviews: await stepReviews(research) };
@@ -322,22 +446,61 @@ function writingInput(a: AuditRow, research: Research): AuditInput {
       intro: a.intro,
       category: research.google?.category ?? a.category,
       city: a.city,
-      website: a.website ?? research.google?.place?.website ?? null,
+      website: a.website ?? (research.google?.match !== "unsure" ? research.google?.place?.website : null) ?? null,
       instagram: a.instagram,
       tiktok: a.tiktok,
       facebook: a.facebook ?? research.social?.facebook ?? null,
     },
     teamNotes: a.team_notes,
-    research: compactForWriting(research),
+    research: compactForWriting(a, research),
+  };
+}
+
+/**
+ * Los hechos fijos de la auditoría, ya verificados. La IA los recibe primero y no los puede contradecir
+ * (antes decía "no tiene Google" y luego citaba sus reseñas, o "no tiene sitio" cuando sí tenía).
+ */
+function factsFor(a: AuditRow, r: Research) {
+  const g = r.google;
+  const confirmed = !!g?.place && g.match !== "unsure";
+  const own = r.web?.own;
+  const socialOwn = r.social?.own ?? [];
+  const sp = (platform: string) => socialOwn.find((p) => p.platform === platform);
+  const social = (platform: "instagram" | "tiktok", given: string | null) => {
+    const p = sp(platform);
+    if (p && !("notFound" in p)) return `FOUND: @${p.handle}, ${p.followers ?? "?"} followers, ${p.stats.postsLast30Days} posts in the last 30 days`;
+    if (p || given) return `EXISTS (@${p?.handle ?? given}) but we could not load its data. Do NOT say they lack it; judge it as not reviewed`;
+    return "NOT FOUND (not given, not on their website, Google profile or a Google search)";
+  };
+  return {
+    googleBusinessProfile: confirmed
+      ? `FOUND and confirmed: "${g!.place!.title}", ${g!.place!.rating ?? "no"} stars, ${g!.place!.reviewsCount ?? 0} reviews. They DO have a Google Business Profile.`
+      : g?.place
+        ? `NOT CONFIRMED: the closest result was "${g.place.title}" (${g.place.address ?? "no address"}), but we could not confirm it is theirs. Do not quote its reviews or rating as theirs. Say we could not confirm their listing.`
+        : "NOT FOUND when searching their name in their city.",
+    website: own
+      ? own.ok
+        ? `FOUND: ${own.finalUrl ?? own.url}, it loads${own.rendered ? " (read with a browser)" : ""}.`
+        : `FOUND: ${own.url}, but it did not load for us (${own.error}). Say it may be down or slow, never that they have no website.`
+      : "NOT FOUND (not given, not on Google, not in their Instagram bio, not in a Google search).",
+    instagram: social("instagram", handleOf(a.instagram, "instagram")),
+    tiktok: social("tiktok", handleOf(a.tiktok, "tiktok")),
+    facebook: a.facebook || r.social?.facebook ? `FOUND: ${a.facebook || r.social?.facebook}` : "NOT FOUND",
+    discoveredByUs: r.discovery?.found ?? [],
   };
 }
 
 /** Lo que Claude necesita leer, sin lo que solo infla el texto. */
-function compactForWriting(r: Research) {
+function compactForWriting(a: AuditRow, r: Research) {
+  const unsure = r.google?.match === "unsure";
   return {
+    FACTS: factsFor(a, r),
     google: r.google
       ? {
           ...r.google,
+          // si no estamos seguros de que el perfil sea suyo, no le pasamos sus reseñas (las citaba como suyas)
+          place: unsure ? null : r.google.place,
+          possibleMatch: unsure && r.google.place ? { title: r.google.place.title, address: r.google.place.address, rating: r.google.place.rating, reviewsCount: r.google.place.reviewsCount } : undefined,
           matchNote:
             r.google.match === "unsure"
               ? "WARNING: we searched Google by name and are NOT sure this profile is theirs (the name does not match well). Do not judge their Google presence as if it were confirmed; say we could not confirm their Google listing and recommend they claim/verify it."
