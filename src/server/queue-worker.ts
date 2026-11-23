@@ -115,6 +115,21 @@ async function scanFolder(db: SupabaseClient, folder: Folder, log: (m: string) =
     if (!item) continue; // ya existía (otro worker)
     log(`   preparando ${f.name}`);
     try {
+      await withRetries(() => prepare(f, raw, item.id), (n, e) => log(`   … ${f.name}: ${e.message.slice(0, 60)}, reintento ${n} de ${RETRIES}`));
+      added++;
+    } catch (e) {
+      failed++;
+      log(`   ✗ ${f.name}: ${(e as Error).message}`);
+      await db.from("queue_items").update({ status: "failed", error: (e as Error).message.slice(0, 500) }).eq("id", item.id);
+    }
+  }
+  log(`   listo: ${added} nuevos${replaced ? `, ${replaced} corregidos` : ""}${failed ? `, ${failed} con error (dale Reintentar en Aprobar videos)` : ""}${more ? " (siguen más)" : ""}`);
+  return { added, replaced, failed, more };
+
+  /** Sube el video, lo analiza y le escribe copys, hooks y portada. */
+  async function prepare(f: (typeof files)[number], raw: Buffer, itemId: string) {
+    {
+      const item = { id: itemId };
       const media = f.kind === "video" ? shrinkVideo(raw, f.name, MAX_UPLOAD_MB) : { buffer: raw, name: f.name };
       const ext = (media.name.split(".").pop() || "mp4").toLowerCase();
       const mediaPath = `${folder.client_id}/queue/${item.id}.${ext}`;
@@ -147,13 +162,23 @@ async function scanFolder(db: SupabaseClient, folder: Folder, log: (m: string) =
         .from("queue_items")
         .update({ media_path: mediaPath, caption: options[0].text.slice(0, 2200), captions: options, transcript, hooks, ...cover, status: "pending", error: null })
         .eq("id", item.id);
-      added++;
-    } catch (e) {
-      failed++;
-      log(`   ✗ ${f.name}: ${(e as Error).message}`);
-      await db.from("queue_items").update({ status: "failed", error: (e as Error).message.slice(0, 500) }).eq("id", item.id);
     }
   }
-  log(`   listo: ${added} nuevos${replaced ? `, ${replaced} corregidos` : ""}${failed ? `, ${failed} con error` : ""}${more ? " (siguen más)" : ""}`);
-  return { added, replaced, failed, more };
+}
+
+const RETRIES = 3;
+/** Fallas de red pasajeras (se cae la conexión, la IA está saturada): vale la pena volver a intentar. */
+const TRANSIENT = /connection|network|socket|econnreset|etimedout|timeout|timed out|fetch failed|overloaded|rate limit|429|500|502|503|504|529/i;
+
+async function withRetries<T>(fn: () => Promise<T>, onRetry: (n: number, e: Error) => void): Promise<T> {
+  for (let n = 1; ; n++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const err = e as Error;
+      if (n > RETRIES || !TRANSIENT.test(err.message ?? "")) throw err;
+      onRetry(n, err);
+      await new Promise((r) => setTimeout(r, 10_000 * n));
+    }
+  }
 }
